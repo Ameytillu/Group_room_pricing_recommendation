@@ -207,7 +207,7 @@ def generate_pdf_report(
         border_color = GREEN
         alert_text = (
             f"✅  <b>Low Displacement Risk:</b> Current occupancy forecast ({md['curr_occ']:.1f}%) "
-            f"provides sufficient transient headroom. Group can be accommodated with minimal displacement impact."
+            f"leaves enough available inventory for the group block. Group can be accommodated with minimal displacement impact."
         )
 
     alert_data = [[Paragraph(alert_text, s("alert", fontSize=8.5, fontName="Helvetica", leading=12))]]

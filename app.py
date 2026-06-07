@@ -583,9 +583,9 @@ elif st.session_state.step == 3:
         total_rooms   = md['total_rooms']
         nights        = sd['nights']
         room_block    = sd['room_block']
-        fill_thresh   = round(0.95 * total_rooms) * nights
-        otb_rn        = round((md['curr_occ'] / 100) * total_rooms) * nights
-        headroom      = max(fill_thresh - otb_rn, 0)
+        forecast_rooms = r["forecasted_transient_rooms_by_date"][0] if r["forecasted_transient_rooms_by_date"] else 0
+        available_rooms = r["available_inventory_by_date"][0] if r["available_inventory_by_date"] else 0
+        displaced_per_night = r["displaced_rooms_by_date"][0] if r["displaced_rooms_by_date"] else 0
         displaced_rn  = r['displaced_room_nights']
 
         st.markdown(f"""
@@ -596,11 +596,12 @@ elif st.session_state.step == 3:
                 — Proposed Revenue —<br>
                 Group revenue: {room_block * nights} room-nights × ${r['proposed_rate']:,.2f} = <b>${r['group_rev_proposed']:,.0f}</b><br><br>
                 — Displacement Calculation —<br>
-                Fill threshold (95% occ): {round(0.95 * total_rooms)} rooms × {nights} nights = {fill_thresh} room-nights<br>
-                Currently on books:       {round((md['curr_occ']/100) * total_rooms)} rooms × {nights} nights = {otb_rn} room-nights<br>
-                Headroom remaining:       {fill_thresh} − {otb_rn} = {headroom} room-nights<br>
-                Group block:              {room_block} rooms × {nights} nights = {room_block * nights} room-nights<br>
-                Displaced room-nights:    max({room_block * nights} − {headroom}, 0) = {displaced_rn}<br>
+                Hotel capacity:           {total_rooms} rooms<br>
+                Forecasted transient demand: {forecast_rooms} rooms/night × {nights} nights<br>
+                Available inventory:      {total_rooms} − {forecast_rooms} = {available_rooms} rooms/night<br>
+                Group request:            {room_block} rooms/night × {nights} nights = {room_block * nights} room-nights<br>
+                Displaced rooms/night:    max(({forecast_rooms} + {room_block}) − {total_rooms}, 0) = {displaced_per_night}<br>
+                Displaced room-nights:    {displaced_per_night} × {nights} = {displaced_rn}<br>
                 Displaced revenue:        {displaced_rn} × ${proj:,.2f} = ${r['displaced_revenue']:,.0f}
             </div>
             <div class="calc-result">

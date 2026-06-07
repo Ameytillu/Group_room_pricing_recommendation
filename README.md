@@ -24,7 +24,7 @@ Manager enters proposed group rate
   compared against projected transient ADR for context
 
 Displacement math:
-  Displaced room-nights = group block that exceeds 95% occ threshold
+  Displaced room-nights = max((forecasted transient rooms + group rooms) − hotel capacity, 0), summed across stay dates
   Displaced revenue     = displaced room-nights × projected transient ADR
   Group revenue         = block × nights × proposed rate
   Net revenue position  = group revenue − displaced transient revenue

@@ -41,6 +41,29 @@ def _displacement_risk_label(displaced_rn: int, room_block_rn: int) -> str:
     return "HIGH"
 
 
+def _forecasted_transient_rooms_by_date(
+    market_data: dict[str, Any],
+    nights: int,
+    total_rooms: int,
+) -> list[int]:
+    """
+    Return forecasted transient rooms for each stay date.
+
+    The current UI captures one forecasted occupancy value for the stay period.
+    If a future UI supplies per-date transient room forecasts, the engine will
+    use those directly.
+    """
+    if "forecasted_transient_rooms" in market_data:
+        forecasts = list(market_data["forecasted_transient_rooms"])
+        if len(forecasts) != nights:
+            raise ValueError("forecasted_transient_rooms must match number of stay nights")
+        return [max(int(round(value)), 0) for value in forecasts]
+
+    curr_occ = market_data["curr_occ"]
+    forecasted_rooms = round((curr_occ / 100) * total_rooms)
+    return [forecasted_rooms] * nights
+
+
 def run_pricing_engine(
     sales_data: dict[str, Any],
     market_data: dict[str, Any],
@@ -54,7 +77,6 @@ def run_pricing_engine(
 
     hist_adr = market_data["hist_adr"]
     hist_occ = market_data["hist_occ"]
-    curr_occ = market_data["curr_occ"]
     total_rooms = market_data["total_rooms"]
     pace_otb = market_data["pace_otb"]
     pace_stly = market_data["pace_stly"]
@@ -79,14 +101,21 @@ def run_pricing_engine(
     )
     rate_vs_transient_gap = proposed_rate - proj_transient_adr
 
-    fill_threshold_rooms = round(0.95 * total_rooms)
-    fill_threshold_rn = fill_threshold_rooms * nights
-    otb_rooms = round((curr_occ / 100) * total_rooms)
-    otb_rn = otb_rooms * nights
-    headroom_rn = max(fill_threshold_rn - otb_rn, 0)
     group_rn = room_block * nights
-
-    displaced_rn = max(group_rn - headroom_rn, 0)
+    forecasted_transient_rooms = _forecasted_transient_rooms_by_date(
+        market_data,
+        nights,
+        total_rooms,
+    )
+    available_inventory_by_date = [
+        max(total_rooms - forecast_rooms, 0)
+        for forecast_rooms in forecasted_transient_rooms
+    ]
+    displaced_rooms_by_date = [
+        max((forecast_rooms + room_block) - total_rooms, 0)
+        for forecast_rooms in forecasted_transient_rooms
+    ]
+    displaced_rn = sum(displaced_rooms_by_date)
     displaced_revenue = displaced_rn * proj_transient_adr
     displacement_risk = _displacement_risk_label(displaced_rn, group_rn)
 
@@ -103,6 +132,9 @@ def run_pricing_engine(
         "rate_vs_transient_pct": round(rate_vs_transient_pct, 1),
         "rate_vs_transient_gap": round(rate_vs_transient_gap, 2),
         "displaced_room_nights": int(displaced_rn),
+        "forecasted_transient_rooms_by_date": forecasted_transient_rooms,
+        "available_inventory_by_date": available_inventory_by_date,
+        "displaced_rooms_by_date": displaced_rooms_by_date,
         "displaced_revenue": round(displaced_revenue, 2),
         "displacement_risk": displacement_risk,
         "displacement_cost": round(displacement_cost, 2),
