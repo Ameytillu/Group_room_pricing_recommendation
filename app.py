@@ -543,45 +543,43 @@ elif st.session_state.step == 3:
             hist_adr = row["hist_adr"]
             hist_occ = row["hist_occ"]
             st.markdown(f"""
-            <div class="calc-box">
-                <div class="calc-step-num">Stay Date {idx}</div>
-                <div class="calc-step-title">{format_date(row['stay_date'])}</div>
-                <div class="calc-formula">
-                    <strong>1. Group Rate Positioning</strong><br>
-                    Uses historical group ADR, historical group occupancy, group ADR trend, desired group ADR growth %, MPI, ARI, and pace.<br><br>
-                    Historical group ADR baseline:<br>
-                    (${hist_adr[0]:,.2f} + ${hist_adr[1]:,.2f} + ${hist_adr[2]:,.2f}) ÷ 3 = ${row['avg_hist_adr']:,.2f}<br><br>
-                    Historical group occupancy baseline:<br>
-                    ({hist_occ[0]:.1f}% + {hist_occ[1]:.1f}% + {hist_occ[2]:.1f}%) ÷ 3 = {row['avg_hist_occ']:.1f}%<br><br>
-                    Group ADR YoY trend:<br>
-                    {years[0]} to {years[1]}: (${hist_adr[1]:,.2f} - ${hist_adr[0]:,.2f}) ÷ ${hist_adr[0]:,.2f} = {row['yoy_1']:+.2f}%<br>
-                    {years[1]} to {years[2]}: (${hist_adr[2]:,.2f} - ${hist_adr[1]:,.2f}) ÷ ${hist_adr[1]:,.2f} = {row['yoy_2']:+.2f}%<br>
-                    Average YoY trend: ({row['yoy_1']:+.2f}% + {row['yoy_2']:+.2f}%) ÷ 2 = {row['yoy_trend']:+.2f}%<br><br>
-                    Indicated Group Rate:<br>
-                    ${row['avg_hist_adr']:,.2f} × (1 + {row['yoy_trend']:+.2f}% ÷ 100) = ${row['after_group_yoy_trend_adr']:,.2f}<br>
-                    ${row['after_group_yoy_trend_adr']:,.2f} × (1 + {growth:+.1f}% ÷ 100) = ${row['daily_indicated_group_rate']:,.2f}<br><br>
-                    Market signals:<br>
-                    Historical group occupancy: {row['avg_hist_occ']:.1f}%<br>
-                    Pace: {r['pace_variance']:+.0f} rooms vs STLY<br>
-                    STR: MPI {md['str_mpi']:.1f}, ARI {md['str_ari']:.1f}, comp occ {md['str_comp_occ']:.1f}%<br><br>
-
-                    <strong>2. Displacement Analysis</strong><br>
-                    Uses PMS forecast rooms, PMS forecast ADR, hotel capacity, and daily group rooms only.<br><br>
-                    Group revenue:<br>
-                    {row['group_rooms']} rooms × ${recommended_rate:,.2f} = ${row['group_revenue']:,.2f}<br><br>
-                    Displaced rooms:<br>
-                    max(({row['pms_forecast_rooms']} PMS forecast rooms + {row['group_rooms']} daily group rooms) - {row['hotel_capacity']} hotel capacity, 0)
-                    = {row['displaced_rooms']} rooms<br><br>
-                    Displaced revenue:<br>
-                    {row['displaced_rooms']} displaced rooms × ${row['pms_forecast_adr']:,.2f} PMS forecast ADR = ${row['displaced_revenue']:,.2f}<br><br>
-                    Net revenue position:<br>
-                    ${row['group_revenue']:,.2f} - ${row['displaced_revenue']:,.2f} = ${row['net_revenue_position']:+,.2f}
-                </div>
-                <div class="calc-result">
-                    {format_date(row['stay_date'])}: demand after group = {row['total_demand_after_group']} rooms,
-                    displaced rooms = {row['displaced_rooms']}, net = ${row['net_revenue_position']:+,.0f}
-                </div>
-            </div>
+<div class="calc-box">
+<div class="calc-step-num">Stay Date {idx}</div>
+<div class="calc-step-title">{format_date(row['stay_date'])}</div>
+<div class="calc-formula">
+<strong>1. Group Rate Positioning</strong><br>
+Uses historical group ADR, historical group occupancy, group ADR trend, desired group ADR growth %, MPI, ARI, and pace.<br><br>
+Historical group ADR baseline:<br>
+(${hist_adr[0]:,.2f} + ${hist_adr[1]:,.2f} + ${hist_adr[2]:,.2f}) ÷ 3 = ${row['avg_hist_adr']:,.2f}<br><br>
+Historical group occupancy baseline:<br>
+({hist_occ[0]:.1f}% + {hist_occ[1]:.1f}% + {hist_occ[2]:.1f}%) ÷ 3 = {row['avg_hist_occ']:.1f}%<br><br>
+Group ADR YoY trend:<br>
+{years[0]} to {years[1]}: (${hist_adr[1]:,.2f} - ${hist_adr[0]:,.2f}) ÷ ${hist_adr[0]:,.2f} = {row['yoy_1']:+.2f}%<br>
+{years[1]} to {years[2]}: (${hist_adr[2]:,.2f} - ${hist_adr[1]:,.2f}) ÷ ${hist_adr[1]:,.2f} = {row['yoy_2']:+.2f}%<br>
+Average YoY trend: ({row['yoy_1']:+.2f}% + {row['yoy_2']:+.2f}%) ÷ 2 = {row['yoy_trend']:+.2f}%<br><br>
+Indicated Group Rate:<br>
+${row['avg_hist_adr']:,.2f} × (1 + {row['yoy_trend']:+.2f}% ÷ 100) = ${row['after_group_yoy_trend_adr']:,.2f}<br>
+${row['after_group_yoy_trend_adr']:,.2f} × (1 + {growth:+.1f}% ÷ 100) = ${row['daily_indicated_group_rate']:,.2f}<br><br>
+Market signals:<br>
+Historical group occupancy: {row['avg_hist_occ']:.1f}%<br>
+Pace: {r['pace_variance']:+.0f} rooms vs STLY<br>
+STR: MPI {md['str_mpi']:.1f}, ARI {md['str_ari']:.1f}, comp occ {md['str_comp_occ']:.1f}%<br><br>
+<strong>2. Displacement Analysis</strong><br>
+Uses PMS forecast rooms, PMS forecast ADR, hotel capacity, and daily group rooms only.<br><br>
+Group revenue:<br>
+{row['group_rooms']} rooms × ${recommended_rate:,.2f} = ${row['group_revenue']:,.2f}<br><br>
+Displaced rooms:<br>
+max(({row['pms_forecast_rooms']} PMS forecast rooms + {row['group_rooms']} daily group rooms) - {row['hotel_capacity']} hotel capacity, 0) = {row['displaced_rooms']} rooms<br><br>
+Displaced revenue:<br>
+{row['displaced_rooms']} displaced rooms × ${row['pms_forecast_adr']:,.2f} PMS forecast ADR = ${row['displaced_revenue']:,.2f}<br><br>
+Net revenue position:<br>
+${row['group_revenue']:,.2f} - ${row['displaced_revenue']:,.2f} = ${row['net_revenue_position']:+,.2f}
+</div>
+<div class="calc-result">
+{format_date(row['stay_date'])}: demand after group = {row['total_demand_after_group']} rooms,
+displaced rooms = {row['displaced_rooms']}, net = ${row['net_revenue_position']:+,.0f}
+</div>
+</div>
             """, unsafe_allow_html=True)
 
         st.markdown(f"""
