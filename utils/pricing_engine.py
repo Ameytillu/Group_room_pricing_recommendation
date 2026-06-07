@@ -52,7 +52,7 @@ def _pace_adjustment(pace_otb: int, pace_stly: int) -> float:
     return 0.0
 
 
-def _str_adjustment(mpi: float, ari: float) -> float:
+def _str_adjustment(mpi: float, ari: float, comp_occ: float) -> float:
     adjustment = 0.0
     if mpi >= 105:
         adjustment += 0.015
@@ -61,6 +61,12 @@ def _str_adjustment(mpi: float, ari: float) -> float:
     if ari >= 105:
         adjustment += 0.015
     elif ari < 95:
+        adjustment -= 0.015
+    if comp_occ >= 85:
+        adjustment += 0.015
+    elif comp_occ >= 75:
+        adjustment += 0.0075
+    elif comp_occ < 55:
         adjustment -= 0.015
     return adjustment
 
@@ -85,7 +91,11 @@ def run_pricing_engine(
     total_rooms = int(market_data["total_rooms"])
     adr_growth = market_data["adr_growth_pct"] / 100
     pace_adj = _pace_adjustment(market_data["pace_otb"], market_data["pace_stly"])
-    str_adj = _str_adjustment(market_data["str_mpi"], market_data["str_ari"])
+    str_adj = _str_adjustment(
+        market_data["str_mpi"],
+        market_data["str_ari"],
+        market_data.get("str_comp_occ", 0.0),
+    )
 
     daily_results = []
     for row in daily_inputs:
@@ -93,12 +103,14 @@ def run_pricing_engine(
         hist_occ = [float(value) for value in row["hist_occ"]]
         hist_adr = [float(value) for value in row["hist_adr"]]
         forecasted_transient_rooms = int(round(row["forecasted_transient_rooms"]))
+        current_adr_on_books = float(row.get("curr_adr", 0.0))
 
         avg_hist_adr = _avg(hist_adr)
         avg_hist_occ = _avg(hist_occ)
         yoy_trend = _yoy_trend(hist_adr)
         after_yoy_trend_adr = avg_hist_adr * (1 + yoy_trend)
-        projected_transient_adr = after_yoy_trend_adr * (1 + adr_growth)
+        historical_projected_adr = after_yoy_trend_adr * (1 + adr_growth)
+        projected_transient_adr = max(historical_projected_adr, current_adr_on_books)
         yoy_1 = ((hist_adr[1] - hist_adr[0]) / hist_adr[0]) if hist_adr[0] else 0.0
         yoy_2 = ((hist_adr[2] - hist_adr[1]) / hist_adr[1]) if hist_adr[1] else 0.0
 
@@ -137,12 +149,14 @@ def run_pricing_engine(
             "str_adjustment": round(str_adj, 3),
             "hist_occ": hist_occ,
             "hist_adr": hist_adr,
+            "current_adr_on_books": round(current_adr_on_books, 2),
             "avg_hist_adr": round(avg_hist_adr, 2),
             "avg_hist_occ": round(avg_hist_occ, 2),
             "yoy_1": round(yoy_1 * 100, 2),
             "yoy_2": round(yoy_2 * 100, 2),
             "yoy_trend": round(yoy_trend * 100, 2),
             "after_yoy_trend_adr": round(after_yoy_trend_adr, 2),
+            "historical_projected_adr": round(historical_projected_adr, 2),
             "projected_transient_adr": round(projected_transient_adr, 2),
             "rate_multiplier": round(rate_multiplier, 3),
             "daily_recommended_rate": round(daily_recommended_rate, 2),

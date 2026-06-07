@@ -183,7 +183,9 @@ def daily_results_df(results: dict) -> pd.DataFrame:
             "Total Demand After Group": row["total_demand_after_group"],
             "Hotel Capacity": row["hotel_capacity"],
             "Displaced Rooms": row["displaced_rooms"],
+            "Current ADR on Books": f"${row['current_adr_on_books']:,.0f}",
             "Projected Transient ADR": f"${row['projected_transient_adr']:,.0f}",
+            "Daily Indicated Rate": f"${row['daily_recommended_rate']:,.0f}",
             "Group Revenue": f"${row['group_revenue']:,.0f}",
             "Displaced Revenue": f"${row['displaced_revenue']:,.0f}",
             "Net Revenue Position": f"${row['net_revenue_position']:+,.0f}",
@@ -555,15 +557,17 @@ elif st.session_state.step == 3:
                     {years[0]} to {years[1]}: (${hist_adr[1]:,.2f} - ${hist_adr[0]:,.2f}) ÷ ${hist_adr[0]:,.2f} = {row['yoy_1']:+.2f}%<br>
                     {years[1]} to {years[2]}: (${hist_adr[2]:,.2f} - ${hist_adr[1]:,.2f}) ÷ ${hist_adr[1]:,.2f} = {row['yoy_2']:+.2f}%<br>
                     Average YoY trend: ({row['yoy_1']:+.2f}% + {row['yoy_2']:+.2f}%) ÷ 2 = {row['yoy_trend']:+.2f}%<br><br>
-                    Projected transient ADR:<br>
+                    Historical projected transient ADR:<br>
                     ${row['avg_hist_adr']:,.2f} × (1 + {row['yoy_trend']:+.2f}% ÷ 100) = ${row['after_yoy_trend_adr']:,.2f}<br>
-                    ${row['after_yoy_trend_adr']:,.2f} × (1 + {growth:+.1f}% ÷ 100) = ${row['projected_transient_adr']:,.2f}<br><br>
+                    ${row['after_yoy_trend_adr']:,.2f} × (1 + {growth:+.1f}% ÷ 100) = ${row['historical_projected_adr']:,.2f}<br>
+                    Projected transient ADR = max(${row['historical_projected_adr']:,.2f}, current ADR on books ${row['current_adr_on_books']:,.2f})
+                    = ${row['projected_transient_adr']:,.2f}<br><br>
                     Daily rate recommendation signal:<br>
                     Base group multiplier: {row['base_group_multiplier']:.0%}<br>
                     Occupancy adjustment ({row['forecast_occ_pct']:.1f}% forecast): {row['occupancy_adjustment']:+.3f}<br>
                     Displacement adjustment ({row['displaced_share']:.1f}% of block displaced): {row['displacement_adjustment']:+.3f}<br>
                     Pace adjustment ({r['pace_variance']:+.0f} rooms vs STLY): {row['pace_adjustment']:+.3f}<br>
-                    STR adjustment (MPI {md['str_mpi']:.1f}, ARI {md['str_ari']:.1f}): {row['str_adjustment']:+.3f}<br>
+                    STR adjustment (MPI {md['str_mpi']:.1f}, ARI {md['str_ari']:.1f}, comp occ {md['str_comp_occ']:.1f}%): {row['str_adjustment']:+.3f}<br>
                     Final daily multiplier: {row['rate_multiplier']:.1%}<br>
                     Daily indicated rate: ${row['projected_transient_adr']:,.2f} × {row['rate_multiplier']:.1%} = ${row['daily_recommended_rate']:,.2f}<br><br>
                     Group revenue:<br>

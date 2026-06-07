@@ -112,6 +112,8 @@ def generate_pdf_report(
         ["Group Revenue", f"${r['group_rev_recommended']:,.0f}", "Displaced Revenue", f"${r['displaced_revenue']:,.0f}"],
         ["Net Revenue Position", f"${r['net_revenue_position']:+,.0f}", "Displacement Risk", r["displacement_risk"]],
         ["3-Yr Avg ADR", f"${r['avg_hist_adr']:,.0f}", "3-Yr Avg Occupancy", f"{r['avg_hist_occ']:.1f}%"],
+        ["Pace vs STLY", f"{r['pace_variance']:+.0f} rooms", "STR Comp Occupancy", f"{md['str_comp_occ']:.1f}%"],
+        ["MPI / ARI", f"{md['str_mpi']:.1f} / {md['str_ari']:.1f}", "ADR Growth Assumption", f"{md['adr_growth_pct']:+.1f}%"],
     ]
     summary_table = Table(summary_rows, colWidths=[1.7 * inch, 2.1 * inch, 1.7 * inch, 2.1 * inch])
     summary_table.setStyle(TableStyle([
@@ -132,26 +134,26 @@ def generate_pdf_report(
     story.append(Paragraph("Daily Displacement Table", h2))
     story.append(HRFlowable(width="100%", thickness=1.3, color=BLUE, spaceAfter=5))
     daily_rows = [[
-        "Stay Date", "Group", "Forecast", "Demand", "Capacity", "Displaced",
-        "Proj ADR", "Group Rev", "Disp Rev", "Net",
+        "Stay Date", "Group", "Forecast", "Displaced", "Curr ADR",
+        "Proj ADR", "Indicated", "Group Rev", "Disp Rev", "Net",
     ]]
     for row in r["daily_results"]:
         daily_rows.append([
             _fmt_date(row["stay_date"]),
             row["group_rooms"],
             row["forecasted_transient_rooms"],
-            row["total_demand_after_group"],
-            row["hotel_capacity"],
             row["displaced_rooms"],
+            f"${row['current_adr_on_books']:,.0f}",
             f"${row['projected_transient_adr']:,.0f}",
+            f"${row['daily_recommended_rate']:,.0f}",
             f"${row['group_revenue']:,.0f}",
             f"${row['displaced_revenue']:,.0f}",
             f"${row['net_revenue_position']:+,.0f}",
         ])
     daily_table = Table(
         daily_rows,
-        colWidths=[0.86 * inch, 0.55 * inch, 0.65 * inch, 0.65 * inch, 0.65 * inch,
-                   0.72 * inch, 0.78 * inch, 0.85 * inch, 0.85 * inch, 0.8 * inch],
+        colWidths=[0.86 * inch, 0.55 * inch, 0.65 * inch, 0.72 * inch, 0.78 * inch,
+                   0.78 * inch, 0.78 * inch, 0.85 * inch, 0.85 * inch, 0.8 * inch],
         repeatRows=1,
     )
     daily_table.setStyle(TableStyle([
