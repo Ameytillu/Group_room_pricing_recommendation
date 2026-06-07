@@ -7,9 +7,12 @@ PDF export for the daily group displacement analysis.
 from __future__ import annotations
 
 from datetime import date
+from html import escape
 from io import BytesIO
 from typing import Any
 
+from reportlab.graphics.charts.piecharts import Pie
+from reportlab.graphics.shapes import Drawing, Rect, String
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import landscape, letter
@@ -32,10 +35,76 @@ def _fmt_date(value: Any) -> str:
     return str(value)
 
 
+def _money(value: Any) -> str:
+    return f"${float(value or 0):,.0f}"
+
+
+def _safe_text(value: Any) -> str:
+    text = str(value or "-").strip() or "-"
+    return escape(text)
+
+
+def _ancillary_summary(ancillary_data: dict[str, Any] | None) -> dict[str, Any]:
+    data = ancillary_data or {}
+    banquet_revenue = float(data.get("banquet_revenue", 0.0) or 0.0)
+    fb_attendees = int(data.get("fb_attendees", 0) or 0)
+    fb_price_per_head = float(data.get("fb_price_per_head", 0.0) or 0.0)
+    fb_revenue = float(data.get("fb_revenue", fb_attendees * fb_price_per_head) or 0.0)
+    return {
+        "banquet_required": data.get("banquet_required", "No"),
+        "banquet_count": int(data.get("banquet_count", 0) or 0),
+        "banquet_descriptions": data.get("banquet_descriptions", ""),
+        "banquet_revenue": banquet_revenue,
+        "banquet_notes": data.get("banquet_notes", ""),
+        "fb_required": data.get("fb_required", "No"),
+        "fb_attendees": fb_attendees,
+        "fb_price_per_head": fb_price_per_head,
+        "fb_revenue": fb_revenue,
+        "fb_notes": data.get("fb_notes", ""),
+        "total_ancillary_revenue": banquet_revenue + fb_revenue,
+    }
+
+
+def _revenue_mix_chart(room_revenue: float, fb_revenue: float, banquet_revenue: float) -> Drawing:
+    drawing = Drawing(360, 180)
+    values = [max(room_revenue, 0), max(fb_revenue, 0), max(banquet_revenue, 0)]
+    labels = ["Rooms", "F&B", "Banquet"]
+    if sum(values) <= 0:
+        values = [1]
+        labels = ["No revenue"]
+
+    pie = Pie()
+    pie.x = 30
+    pie.y = 20
+    pie.width = 140
+    pie.height = 140
+    pie.data = values
+    pie.labels = labels
+    pie.slices.strokeWidth = 0.5
+    pie.slices[0].fillColor = BLUE
+    if len(values) > 1:
+        pie.slices[1].fillColor = GREEN
+        pie.slices[2].fillColor = colors.HexColor("#EA580C")
+    drawing.add(pie)
+
+    legend_rows = [
+        ("Rooms Revenue", room_revenue, BLUE),
+        ("F&B Revenue", fb_revenue, GREEN),
+        ("Banquet Hall Revenue", banquet_revenue, colors.HexColor("#EA580C")),
+    ]
+    y = 125
+    for label, value, color in legend_rows:
+        drawing.add(Rect(205, y - 2, 8, 8, fillColor=color, strokeColor=color))
+        drawing.add(String(220, y, f"{label}: {_money(value)}", fontSize=8, fillColor=NAVY))
+        y -= 22
+    return drawing
+
+
 def generate_pdf_report(
     sales_data: dict[str, Any],
     market_data: dict[str, Any],
     results: dict[str, Any],
+    ancillary_data: dict[str, Any] | None = None,
 ) -> bytes:
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -80,6 +149,13 @@ def generate_pdf_report(
     sd = sales_data
     md = market_data
     r = results
+    ancillary = _ancillary_summary(ancillary_data)
+    room_revenue = float(r["group_rev_recommended"])
+    banquet_revenue = ancillary["banquet_revenue"]
+    fb_revenue = ancillary["fb_revenue"]
+    total_ancillary_revenue = ancillary["total_ancillary_revenue"]
+    total_group_revenue_with_ancillaries = room_revenue + total_ancillary_revenue
+    total_net_revenue_with_ancillaries = float(r["net_revenue_position"]) + total_ancillary_revenue
 
     story.append(Paragraph("Group Details", h2))
     story.append(HRFlowable(width="100%", thickness=1.3, color=BLUE, spaceAfter=5))
@@ -131,6 +207,61 @@ def generate_pdf_report(
     story.append(summary_table)
     story.append(Spacer(1, 0.12 * inch))
 
+    story.append(Paragraph("Ancillary Revenue", h2))
+    story.append(HRFlowable(width="100%", thickness=1.3, color=BLUE, spaceAfter=5))
+    ancillary_rows = [
+        ["Banquet hall required", ancillary["banquet_required"], "Number of banquet halls", str(ancillary["banquet_count"])],
+        ["Banquet hall names/descriptions", Paragraph(_safe_text(ancillary["banquet_descriptions"]), sm), "Banquet hall revenue", _money(banquet_revenue)],
+        ["F&B required", ancillary["fb_required"], "Number of attendees", f"{ancillary['fb_attendees']:,}"],
+        ["F&B price per head", _money(ancillary["fb_price_per_head"]), "F&B revenue", f"{ancillary['fb_attendees']:,} attendees x {_money(ancillary['fb_price_per_head'])} per head = {_money(fb_revenue)}"],
+        ["F&B notes", Paragraph(_safe_text(ancillary["fb_notes"]), sm), "Banquet notes", Paragraph(_safe_text(ancillary["banquet_notes"]), sm)],
+    ]
+    ancillary_table = Table(ancillary_rows, colWidths=[1.55 * inch, 3.0 * inch, 1.55 * inch, 3.0 * inch])
+    ancillary_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+        ("TEXTCOLOR", (0, 0), (0, -1), NAVY),
+        ("TEXTCOLOR", (2, 0), (2, -1), NAVY),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [LIGHT, colors.white]),
+        ("GRID", (0, 0), (-1, -1), 0.25, LGRAY),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(ancillary_table)
+    story.append(Spacer(1, 0.12 * inch))
+
+    story.append(Paragraph("Total Group Revenue", h2))
+    story.append(HRFlowable(width="100%", thickness=1.3, color=BLUE, spaceAfter=5))
+    total_rows = [
+        ["Room Revenue", _money(room_revenue), "Banquet Hall Revenue", _money(banquet_revenue)],
+        ["F&B Revenue", _money(fb_revenue), "Total Ancillary Revenue", _money(total_ancillary_revenue)],
+        ["Total Group Revenue Including Ancillaries", _money(total_group_revenue_with_ancillaries), "Displaced Revenue", _money(r["displaced_revenue"])],
+        ["Total Net Revenue Including Ancillaries", f"${total_net_revenue_with_ancillaries:+,.0f}", "", ""],
+    ]
+    total_table = Table(total_rows, colWidths=[2.35 * inch, 1.45 * inch, 2.35 * inch, 1.45 * inch])
+    total_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+        ("TEXTCOLOR", (0, 0), (0, -1), NAVY),
+        ("TEXTCOLOR", (2, 0), (2, -1), NAVY),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [LIGHT, colors.white]),
+        ("GRID", (0, 0), (-1, -1), 0.25, LGRAY),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(total_table)
+    story.append(Spacer(1, 0.08 * inch))
+    story.append(Paragraph(
+        "Room revenue and displacement are calculated using the existing PMS forecast logic. Banquet and F&amp;B revenue are added separately as ancillary group revenue and do not affect room displacement.",
+        sm,
+    ))
+    story.append(Spacer(1, 0.12 * inch))
+
     story.append(Paragraph("Daily Displacement Table", h2))
     story.append(HRFlowable(width="100%", thickness=1.3, color=BLUE, spaceAfter=5))
     daily_rows = [[
@@ -168,6 +299,11 @@ def generate_pdf_report(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
     story.append(daily_table)
+    story.append(Spacer(1, 0.12 * inch))
+
+    story.append(Paragraph("Revenue Mix Chart", h2))
+    story.append(HRFlowable(width="100%", thickness=1.3, color=BLUE, spaceAfter=5))
+    story.append(_revenue_mix_chart(room_revenue, fb_revenue, banquet_revenue))
     story.append(Spacer(1, 0.12 * inch))
 
     if sd.get("special_notes"):

@@ -193,6 +193,22 @@ def daily_results_df(results: dict) -> pd.DataFrame:
     ])
 
 
+def ancillary_revenue_summary(ancillary_data: dict) -> dict:
+    banquet_revenue = float(ancillary_data.get("banquet_revenue", 0.0))
+    fb_attendees = int(ancillary_data.get("fb_attendees", 0))
+    fb_price_per_head = float(ancillary_data.get("fb_price_per_head", 0.0))
+    fb_revenue = fb_attendees * fb_price_per_head
+    total_ancillary_revenue = banquet_revenue + fb_revenue
+    return {
+        **ancillary_data,
+        "banquet_revenue": banquet_revenue,
+        "fb_attendees": fb_attendees,
+        "fb_price_per_head": fb_price_per_head,
+        "fb_revenue": fb_revenue,
+        "total_ancillary_revenue": total_ancillary_revenue,
+    }
+
+
 if "step" not in st.session_state:
     st.session_state.step = 1
 if "sales_data" not in st.session_state:
@@ -201,6 +217,18 @@ if "market_data" not in st.session_state:
     st.session_state.market_data = {}
 if "results" not in st.session_state:
     st.session_state.results = None
+if "ancillary_data" not in st.session_state:
+    st.session_state.ancillary_data = {
+        "banquet_required": "No",
+        "banquet_count": 0,
+        "banquet_descriptions": "",
+        "banquet_revenue": 0.0,
+        "banquet_notes": "",
+        "fb_required": "No",
+        "fb_attendees": 0,
+        "fb_price_per_head": 0.0,
+        "fb_notes": "",
+    }
 
 st.markdown("""
 <div class="app-header">
@@ -534,6 +562,152 @@ elif st.session_state.step == 3:
         ],
     }), use_container_width=True, hide_index=True)
 
+    st.markdown("#### Additional Group Revenue")
+    with st.container():
+        b1, b2 = st.columns([1, 1])
+        with b1:
+            banquet_required = st.radio(
+                "Does the group require banquet/meeting halls?",
+                ["No", "Yes"],
+                horizontal=True,
+                index=1 if st.session_state.ancillary_data.get("banquet_required") == "Yes" else 0,
+            )
+        with b2:
+            banquet_count = st.number_input(
+                "Number of banquet halls required",
+                min_value=0,
+                max_value=50,
+                value=int(st.session_state.ancillary_data.get("banquet_count", 0)),
+                step=1,
+                disabled=banquet_required == "No",
+            )
+
+        banquet_descriptions = st.text_area(
+            "Banquet hall names or descriptions",
+            value=st.session_state.ancillary_data.get("banquet_descriptions", ""),
+            placeholder="e.g. Grand Ballroom, Salon A/B, boardroom setup...",
+            height=70,
+            disabled=banquet_required == "No",
+        )
+        banquet_revenue = st.number_input(
+            "Banquet hall rental revenue",
+            min_value=0.0,
+            value=float(st.session_state.ancillary_data.get("banquet_revenue", 0.0)),
+            step=100.0,
+            disabled=banquet_required == "No",
+        )
+        banquet_notes = st.text_area(
+            "Banquet notes",
+            value=st.session_state.ancillary_data.get("banquet_notes", ""),
+            placeholder="Setup, AV, timing, concessions, room turns...",
+            height=70,
+            disabled=banquet_required == "No",
+        )
+
+        f1, f2, f3 = st.columns([1, 1, 1])
+        with f1:
+            fb_required = st.radio(
+                "Does the group require F&B?",
+                ["No", "Yes"],
+                horizontal=True,
+                index=1 if st.session_state.ancillary_data.get("fb_required") == "Yes" else 0,
+            )
+        with f2:
+            fb_attendees = st.number_input(
+                "Number of attendees / heads",
+                min_value=0,
+                max_value=100000,
+                value=int(st.session_state.ancillary_data.get("fb_attendees", 0)),
+                step=1,
+                disabled=fb_required == "No",
+            )
+        with f3:
+            fb_price_per_head = st.number_input(
+                "F&B price per head",
+                min_value=0.0,
+                value=float(st.session_state.ancillary_data.get("fb_price_per_head", 0.0)),
+                step=1.0,
+                disabled=fb_required == "No",
+            )
+
+        fb_notes = st.text_area(
+            "F&B notes",
+            value=st.session_state.ancillary_data.get("fb_notes", ""),
+            placeholder="Breakfast, lunch, dinner, buffet, coffee break...",
+            height=70,
+            disabled=fb_required == "No",
+        )
+
+    ancillary_data = ancillary_revenue_summary({
+        "banquet_required": banquet_required,
+        "banquet_count": banquet_count if banquet_required == "Yes" else 0,
+        "banquet_descriptions": banquet_descriptions if banquet_required == "Yes" else "",
+        "banquet_revenue": banquet_revenue if banquet_required == "Yes" else 0.0,
+        "banquet_notes": banquet_notes if banquet_required == "Yes" else "",
+        "fb_required": fb_required,
+        "fb_attendees": fb_attendees if fb_required == "Yes" else 0,
+        "fb_price_per_head": fb_price_per_head if fb_required == "Yes" else 0.0,
+        "fb_notes": fb_notes if fb_required == "Yes" else "",
+    })
+    st.session_state.ancillary_data = ancillary_data
+
+    room_revenue = r["group_rev_recommended"]
+    banquet_total = ancillary_data["banquet_revenue"]
+    fb_total = ancillary_data["fb_revenue"]
+    total_ancillary = ancillary_data["total_ancillary_revenue"]
+    total_group_with_ancillaries = room_revenue + total_ancillary
+    total_net_with_ancillaries = r["net_revenue_position"] + total_ancillary
+
+    st.caption(
+        f"F&B Revenue = {ancillary_data['fb_attendees']:,} attendees x "
+        f"${ancillary_data['fb_price_per_head']:,.2f} per head = ${fb_total:,.0f}"
+    )
+
+    st.markdown("#### Revenue Comparison Including Ancillaries")
+    st.dataframe(pd.DataFrame({
+        "Metric": [
+            "Room Revenue",
+            "Banquet Hall Revenue",
+            "F&B Revenue",
+            "Total Ancillary Revenue",
+            "Total Group Revenue Including Ancillaries",
+            "Existing Displaced Revenue",
+            "Total Net Revenue Including Ancillaries",
+        ],
+        "Value": [
+            f"${room_revenue:,.0f}",
+            f"${banquet_total:,.0f}",
+            f"${fb_total:,.0f}",
+            f"${total_ancillary:,.0f}",
+            f"${total_group_with_ancillaries:,.0f}",
+            f"${r['displaced_revenue']:,.0f}",
+            f"${total_net_with_ancillaries:+,.0f}",
+        ],
+    }), use_container_width=True, hide_index=True)
+
+    revenue_mix_df = pd.DataFrame({
+        "Revenue Component": ["Rooms Revenue", "F&B Revenue", "Banquet Hall Revenue"],
+        "Revenue": [room_revenue, fb_total, banquet_total],
+    })
+    if revenue_mix_df["Revenue"].sum() > 0:
+        st.markdown("#### Revenue Mix")
+        st.vega_lite_chart(
+            revenue_mix_df,
+            {
+                "mark": {"type": "arc", "innerRadius": 45},
+                "encoding": {
+                    "theta": {"field": "Revenue", "type": "quantitative"},
+                    "color": {"field": "Revenue Component", "type": "nominal"},
+                    "tooltip": [
+                        {"field": "Revenue Component", "type": "nominal"},
+                        {"field": "Revenue", "type": "quantitative", "format": "$,.0f"},
+                    ],
+                },
+                "view": {"stroke": None},
+            },
+            use_container_width=True,
+        )
+
     with st.expander("🧮 See Daily Calculation Logic", expanded=False):
         years = md["years"]
         growth = md["adr_growth_pct"]
@@ -610,9 +784,20 @@ displaced rooms = {row['displaced_rooms']}, net = ${row['net_revenue_position']:
             st.session_state.sales_data = {}
             st.session_state.market_data = {}
             st.session_state.results = None
+            st.session_state.ancillary_data = {
+                "banquet_required": "No",
+                "banquet_count": 0,
+                "banquet_descriptions": "",
+                "banquet_revenue": 0.0,
+                "banquet_notes": "",
+                "fb_required": "No",
+                "fb_attendees": 0,
+                "fb_price_per_head": 0.0,
+                "fb_notes": "",
+            }
             st.rerun()
     with col_pdf:
-        pdf_bytes = generate_pdf_report(sd, md, r)
+        pdf_bytes = generate_pdf_report(sd, md, r, ancillary_data)
         st.download_button(
             label="📄 Download PDF Report",
             data=pdf_bytes,
