@@ -53,7 +53,10 @@ def run_pricing_engine(
         avg_hist_adr = _avg(hist_adr)
         avg_hist_occ = _avg(hist_occ)
         yoy_trend = _yoy_trend(hist_adr)
-        projected_transient_adr = avg_hist_adr * (1 + yoy_trend) * (1 + adr_growth)
+        after_yoy_trend_adr = avg_hist_adr * (1 + yoy_trend)
+        projected_transient_adr = after_yoy_trend_adr * (1 + adr_growth)
+        yoy_1 = ((hist_adr[1] - hist_adr[0]) / hist_adr[0]) if hist_adr[0] else 0.0
+        yoy_2 = ((hist_adr[2] - hist_adr[1]) / hist_adr[1]) if hist_adr[1] else 0.0
 
         total_demand_after_group = forecasted_transient_rooms + group_rooms
         displaced_rooms = max(total_demand_after_group - total_rooms, 0)
@@ -67,9 +70,14 @@ def run_pricing_engine(
             "total_demand_after_group": total_demand_after_group,
             "hotel_capacity": total_rooms,
             "displaced_rooms": int(displaced_rooms),
+            "hist_occ": hist_occ,
+            "hist_adr": hist_adr,
             "avg_hist_adr": round(avg_hist_adr, 2),
             "avg_hist_occ": round(avg_hist_occ, 2),
+            "yoy_1": round(yoy_1 * 100, 2),
+            "yoy_2": round(yoy_2 * 100, 2),
             "yoy_trend": round(yoy_trend * 100, 2),
+            "after_yoy_trend_adr": round(after_yoy_trend_adr, 2),
             "projected_transient_adr": round(projected_transient_adr, 2),
             "group_revenue": round(group_revenue, 2),
             "displaced_revenue": round(displaced_revenue, 2),

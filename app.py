@@ -533,23 +533,56 @@ elif st.session_state.step == 3:
     }), use_container_width=True, hide_index=True)
 
     with st.expander("🧮 See Daily Calculation Logic", expanded=False):
-        first = r["daily_results"][0]
+        years = md["years"]
+        growth = md["adr_growth_pct"]
+        proposed_rate = r["proposed_rate"]
+
+        for idx, row in enumerate(r["daily_results"], start=1):
+            hist_adr = row["hist_adr"]
+            hist_occ = row["hist_occ"]
+            st.markdown(f"""
+            <div class="calc-box">
+                <div class="calc-step-num">Stay Date {idx}</div>
+                <div class="calc-step-title">{format_date(row['stay_date'])}</div>
+                <div class="calc-formula">
+                    Historical ADR baseline:<br>
+                    (${hist_adr[0]:,.2f} + ${hist_adr[1]:,.2f} + ${hist_adr[2]:,.2f}) ÷ 3 = ${row['avg_hist_adr']:,.2f}<br><br>
+                    Historical occupancy baseline:<br>
+                    ({hist_occ[0]:.1f}% + {hist_occ[1]:.1f}% + {hist_occ[2]:.1f}%) ÷ 3 = {row['avg_hist_occ']:.1f}%<br><br>
+                    YoY ADR trend:<br>
+                    {years[0]} to {years[1]}: (${hist_adr[1]:,.2f} - ${hist_adr[0]:,.2f}) ÷ ${hist_adr[0]:,.2f} = {row['yoy_1']:+.2f}%<br>
+                    {years[1]} to {years[2]}: (${hist_adr[2]:,.2f} - ${hist_adr[1]:,.2f}) ÷ ${hist_adr[1]:,.2f} = {row['yoy_2']:+.2f}%<br>
+                    Average YoY trend: ({row['yoy_1']:+.2f}% + {row['yoy_2']:+.2f}%) ÷ 2 = {row['yoy_trend']:+.2f}%<br><br>
+                    Projected transient ADR:<br>
+                    ${row['avg_hist_adr']:,.2f} × (1 + {row['yoy_trend']:+.2f}% ÷ 100) = ${row['after_yoy_trend_adr']:,.2f}<br>
+                    ${row['after_yoy_trend_adr']:,.2f} × (1 + {growth:+.1f}% ÷ 100) = ${row['projected_transient_adr']:,.2f}<br><br>
+                    Group revenue:<br>
+                    {row['group_rooms']} rooms × ${proposed_rate:,.2f} = ${row['group_revenue']:,.2f}<br><br>
+                    Displaced rooms:<br>
+                    max(({row['forecasted_transient_rooms']} forecasted transient rooms + {row['group_rooms']} group rooms) - {row['hotel_capacity']} hotel capacity, 0)
+                    = {row['displaced_rooms']} rooms<br><br>
+                    Displaced revenue:<br>
+                    {row['displaced_rooms']} displaced rooms × ${row['projected_transient_adr']:,.2f} = ${row['displaced_revenue']:,.2f}<br><br>
+                    Net revenue position:<br>
+                    ${row['group_revenue']:,.2f} - ${row['displaced_revenue']:,.2f} = ${row['net_revenue_position']:+,.2f}
+                </div>
+                <div class="calc-result">
+                    {format_date(row['stay_date'])}: demand after group = {row['total_demand_after_group']} rooms,
+                    displaced rooms = {row['displaced_rooms']}, net = ${row['net_revenue_position']:+,.0f}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
         st.markdown(f"""
         <div class="calc-box">
-            <div class="calc-step-num">Daily Logic</div>
-            <div class="calc-step-title">Each Stay Date Is Calculated Separately</div>
+            <div class="calc-step-num">Totals</div>
+            <div class="calc-step-title">Summed Daily Results</div>
             <div class="calc-formula">
-                Historical ADR baseline = average({md['years'][0]} ADR, {md['years'][1]} ADR, {md['years'][2]} ADR)<br>
-                YoY ADR trend = average(({md['years'][1]} ADR - {md['years'][0]} ADR) / {md['years'][0]} ADR,
-                ({md['years'][2]} ADR - {md['years'][1]} ADR) / {md['years'][1]} ADR)<br>
-                Projected transient ADR = historical ADR baseline × (1 + YoY trend) × (1 + manager growth assumption)<br><br>
-                Daily group revenue = daily group rooms × proposed group rate<br>
-                Daily displaced rooms = max((forecasted transient rooms + daily group rooms) - hotel capacity, 0)<br>
-                Daily displaced revenue = daily displaced rooms × projected transient ADR
-            </div>
-            <div class="calc-result">
-                Example from {format_date(first['stay_date'])}: max(({first['forecasted_transient_rooms']} + {first['group_rooms']}) - {first['hotel_capacity']}, 0)
-                = {first['displaced_rooms']} displaced rooms
+                Total group room-nights = {' + '.join(str(row['group_rooms']) for row in r['daily_results'])} = {r['total_room_nights']}<br>
+                Total group revenue = {' + '.join(f"${row['group_revenue']:,.0f}" for row in r['daily_results'])} = ${r['group_rev_proposed']:,.0f}<br>
+                Total displaced room-nights = {' + '.join(str(row['displaced_rooms']) for row in r['daily_results'])} = {r['displaced_room_nights']}<br>
+                Total displaced revenue = {' + '.join(f"${row['displaced_revenue']:,.0f}" for row in r['daily_results'])} = ${r['displaced_revenue']:,.0f}<br>
+                Net revenue position = ${r['group_rev_proposed']:,.0f} - ${r['displaced_revenue']:,.0f} = ${r['net_revenue_position']:+,.0f}
             </div>
             <div class="calc-note">Displacement is based only on hotel capacity, forecasted transient rooms, and daily group rooms.</div>
         </div>
