@@ -8,6 +8,7 @@ Each stay night is evaluated independently, then totals are summed.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 __all__ = ["run_pricing_engine"]
@@ -34,6 +35,48 @@ def _displacement_risk_label(displaced_rn: int, total_group_rn: int) -> str:
     return "HIGH"
 
 
+def _round_up_5(value: float) -> int:
+    return int(math.ceil(value / 5) * 5)
+
+
+def _pace_adjustment(pace_otb: int, pace_stly: int) -> float:
+    delta = pace_otb - pace_stly
+    if delta >= 30:
+        return 0.03
+    if delta >= 10:
+        return 0.015
+    if delta <= -30:
+        return -0.03
+    if delta <= -10:
+        return -0.015
+    return 0.0
+
+
+def _str_adjustment(mpi: float, ari: float) -> float:
+    adjustment = 0.0
+    if mpi >= 105:
+        adjustment += 0.015
+    elif mpi < 95:
+        adjustment -= 0.015
+    if ari >= 105:
+        adjustment += 0.015
+    elif ari < 95:
+        adjustment -= 0.015
+    return adjustment
+
+
+def _occupancy_adjustment(occupancy_pct: float) -> float:
+    if occupancy_pct >= 95:
+        return 0.10
+    if occupancy_pct >= 85:
+        return 0.07
+    if occupancy_pct >= 75:
+        return 0.04
+    if occupancy_pct >= 60:
+        return 0.00
+    return -0.04
+
+
 def run_pricing_engine(
     sales_data: dict[str, Any],
     market_data: dict[str, Any],
@@ -41,7 +84,8 @@ def run_pricing_engine(
     daily_inputs = market_data["daily_inputs"]
     total_rooms = int(market_data["total_rooms"])
     adr_growth = market_data["adr_growth_pct"] / 100
-    proposed_rate = float(market_data["proposed_rate"])
+    pace_adj = _pace_adjustment(market_data["pace_otb"], market_data["pace_stly"])
+    str_adj = _str_adjustment(market_data["str_mpi"], market_data["str_ari"])
 
     daily_results = []
     for row in daily_inputs:
@@ -60,8 +104,22 @@ def run_pricing_engine(
 
         total_demand_after_group = forecasted_transient_rooms + group_rooms
         displaced_rooms = max(total_demand_after_group - total_rooms, 0)
-        group_revenue = group_rooms * proposed_rate
-        displaced_revenue = displaced_rooms * projected_transient_adr
+        forecast_occ_pct = (forecasted_transient_rooms / total_rooms * 100) if total_rooms else 0.0
+        displaced_share = (displaced_rooms / group_rooms) if group_rooms else 0.0
+        occupancy_adj = _occupancy_adjustment(forecast_occ_pct)
+        displacement_adj = min(displaced_share * 0.12, 0.12)
+        rate_multiplier = min(
+            max(
+                0.84
+                + occupancy_adj
+                + displacement_adj
+                + pace_adj
+                + str_adj,
+                0.72,
+            ),
+            1.05,
+        )
+        daily_recommended_rate = projected_transient_adr * rate_multiplier
 
         daily_results.append({
             "stay_date": row["stay_date"],
@@ -70,6 +128,13 @@ def run_pricing_engine(
             "total_demand_after_group": total_demand_after_group,
             "hotel_capacity": total_rooms,
             "displaced_rooms": int(displaced_rooms),
+            "forecast_occ_pct": round(forecast_occ_pct, 1),
+            "displaced_share": round(displaced_share * 100, 1),
+            "base_group_multiplier": 0.84,
+            "occupancy_adjustment": round(occupancy_adj, 3),
+            "displacement_adjustment": round(displacement_adj, 3),
+            "pace_adjustment": round(pace_adj, 3),
+            "str_adjustment": round(str_adj, 3),
             "hist_occ": hist_occ,
             "hist_adr": hist_adr,
             "avg_hist_adr": round(avg_hist_adr, 2),
@@ -79,14 +144,26 @@ def run_pricing_engine(
             "yoy_trend": round(yoy_trend * 100, 2),
             "after_yoy_trend_adr": round(after_yoy_trend_adr, 2),
             "projected_transient_adr": round(projected_transient_adr, 2),
-            "group_revenue": round(group_revenue, 2),
-            "displaced_revenue": round(displaced_revenue, 2),
-            "net_revenue_position": round(group_revenue - displaced_revenue, 2),
+            "rate_multiplier": round(rate_multiplier, 3),
+            "daily_recommended_rate": round(daily_recommended_rate, 2),
         })
 
     total_group_room_nights = sum(row["group_rooms"] for row in daily_results)
-    total_group_revenue = sum(row["group_revenue"] for row in daily_results)
     total_displaced_room_nights = sum(row["displaced_rooms"] for row in daily_results)
+    recommended_rate = _round_up_5(
+        sum(row["daily_recommended_rate"] * row["group_rooms"] for row in daily_results) / total_group_room_nights
+        if total_group_room_nights
+        else 0
+    )
+
+    for row in daily_results:
+        group_revenue = row["group_rooms"] * recommended_rate
+        displaced_revenue = row["displaced_rooms"] * row["projected_transient_adr"]
+        row["group_revenue"] = round(group_revenue, 2)
+        row["displaced_revenue"] = round(displaced_revenue, 2)
+        row["net_revenue_position"] = round(group_revenue - displaced_revenue, 2)
+
+    total_group_revenue = sum(row["group_revenue"] for row in daily_results)
     total_displaced_revenue = sum(row["displaced_revenue"] for row in daily_results)
     net_revenue_position = total_group_revenue - total_displaced_revenue
 
@@ -99,9 +176,9 @@ def run_pricing_engine(
         weighted_transient_adr = _avg([row["projected_transient_adr"] for row in daily_results])
 
     rate_vs_transient_pct = (
-        proposed_rate / weighted_transient_adr * 100 if weighted_transient_adr else 0.0
+        recommended_rate / weighted_transient_adr * 100 if weighted_transient_adr else 0.0
     )
-    rate_vs_transient_gap = proposed_rate - weighted_transient_adr
+    rate_vs_transient_gap = recommended_rate - weighted_transient_adr
 
     return {
         "daily_results": daily_results,
@@ -109,7 +186,7 @@ def run_pricing_engine(
         "avg_hist_occ": round(_avg([row["avg_hist_occ"] for row in daily_results]), 2),
         "yoy_trend": round(_avg([row["yoy_trend"] for row in daily_results]), 2),
         "proj_transient_adr": round(weighted_transient_adr, 2),
-        "proposed_rate": proposed_rate,
+        "recommended_rate": recommended_rate,
         "rate_vs_transient_pct": round(rate_vs_transient_pct, 1),
         "rate_vs_transient_gap": round(rate_vs_transient_gap, 2),
         "displaced_room_nights": int(total_displaced_room_nights),
@@ -119,8 +196,10 @@ def run_pricing_engine(
             int(total_group_room_nights),
         ),
         "displacement_cost": round(max(total_displaced_revenue - total_group_revenue, 0), 2),
-        "group_rev_proposed": round(total_group_revenue, 2),
+        "group_rev_recommended": round(total_group_revenue, 2),
         "net_revenue_position": round(net_revenue_position, 2),
         "total_room_nights": int(total_group_room_nights),
         "pace_variance": market_data["pace_otb"] - market_data["pace_stly"],
+        "pace_adjustment": pace_adj,
+        "str_adjustment": str_adj,
     }

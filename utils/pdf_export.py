@@ -87,7 +87,7 @@ def generate_pdf_report(
         ["Group / Company", sd["group_name"], "Sales Contact", sd.get("contact_name", "-")],
         ["Arrival Date", sd["arrival_date"].strftime("%B %d, %Y"), "Departure Date", sd["departure_date"].strftime("%B %d, %Y")],
         ["Stay Nights", str(sd["nights"]), "Total Room-Nights", str(r["total_room_nights"])],
-        ["Proposed Rate", f"${r['proposed_rate']:,.0f}", "Meal Plan", sd.get("meal_plan", "-")],
+        ["Recommended Rate", f"${r['recommended_rate']:,.0f}", "Meal Plan", sd.get("meal_plan", "-")],
     ]
     detail_table = Table(detail_rows, colWidths=[1.35 * inch, 3.2 * inch, 1.35 * inch, 3.2 * inch])
     detail_table.setStyle(TableStyle([
@@ -109,7 +109,7 @@ def generate_pdf_report(
     story.append(HRFlowable(width="100%", thickness=1.3, color=BLUE, spaceAfter=5))
     summary_rows = [
         ["Weighted Transient ADR", f"${r['proj_transient_adr']:,.0f}", "Rate vs Transient", f"{r['rate_vs_transient_pct']:.1f}%"],
-        ["Group Revenue", f"${r['group_rev_proposed']:,.0f}", "Displaced Revenue", f"${r['displaced_revenue']:,.0f}"],
+        ["Group Revenue", f"${r['group_rev_recommended']:,.0f}", "Displaced Revenue", f"${r['displaced_revenue']:,.0f}"],
         ["Net Revenue Position", f"${r['net_revenue_position']:+,.0f}", "Displacement Risk", r["displacement_risk"]],
         ["3-Yr Avg ADR", f"${r['avg_hist_adr']:,.0f}", "3-Yr Avg Occupancy", f"{r['avg_hist_occ']:.1f}%"],
     ]

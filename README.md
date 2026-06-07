@@ -9,8 +9,8 @@ A Streamlit app that gives your revenue team structured, data-driven group rate 
 The app has **3 steps**:
 
 1. **Sales Team** enters group details and stay dates
-2. **Revenue Manager** enters daily room block, history, forecast, STR, pace, and proposed rate
-3. **App evaluates** the proposed rate with daily displacement analysis + downloadable PDF
+2. **Revenue Manager** enters daily room block, history, forecast, STR, pace, and growth assumptions
+3. **App recommends** a group rate with daily displacement analysis + downloadable PDF
 
 ### Pricing Logic
 
@@ -21,8 +21,10 @@ For each stay date:
   × (1 + manager's growth assumption %)
 = Daily Projected Transient ADR  ← rate anchor
 
-Manager enters proposed group rate
-  compared against weighted projected transient ADR for context
+App recommends a group rate
+  based on weighted projected transient ADR, displacement pressure, pace, and STR signals
+  daily indicated rate = projected transient ADR × adjusted group multiplier
+  final recommended rate = weighted average of daily indicated rates, rounded up to nearest $5
 
 Displacement math:
   Daily displaced rooms = max((forecasted transient rooms + daily group rooms) - hotel capacity, 0)
@@ -92,13 +94,13 @@ streamlit run app.py
 | Current forecast | Daily forecasted occupancy % or transient rooms + ADR on books |
 | STR Report | MPI, ARI, comp set occupancy % |
 | Pace report | Rooms on books now vs. same time last year |
-| Manager judgment | Expected ADR growth %, proposed group rate |
+| Manager judgment | Expected ADR growth % |
 
 ---
 
 ## Output
 
-- **Proposed rate analysis**: group rate vs. projected transient ADR
+- **Recommended rate analysis**: calculated group rate vs. projected transient ADR
 - **Daily displacement table**: stay date, group rooms, forecast, demand, capacity, displaced rooms, ADR, revenue, and net position
 - **Displacement analysis**: total displaced room-nights, displaced revenue, and net impact
 - **PDF report**: downloadable daily displacement report for proposals / sales communication

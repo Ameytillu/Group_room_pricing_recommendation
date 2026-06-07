@@ -364,7 +364,7 @@ elif st.session_state.step == 2:
     st.markdown("""
     <div class="step-card">
         <div class="step-label">Market Signals + Manager Inputs</div>
-        <div class="step-title">Pace, STR, Growth, and Proposed Rate</div>
+        <div class="step-title">Pace, STR, and Growth Assumption</div>
     """, unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns(3)
@@ -381,11 +381,14 @@ elif st.session_state.step == 2:
     with c5:
         pace_stly = st.number_input("Rooms on Books STLY", min_value=0, max_value=50000, value=195, step=1)
 
-    c6, c7 = st.columns(2)
-    with c6:
-        proposed_rate = st.number_input("Your Proposed Group Rate ($/night)", min_value=0.0, max_value=5000.0, value=160.0, step=5.0)
-    with c7:
-        adr_growth_pct = st.slider("Expected ADR Growth % vs Last Year", min_value=-10.0, max_value=20.0, value=4.0, step=0.5)
+    adr_growth_pct = st.slider(
+        "Expected ADR Growth % vs Last Year",
+        min_value=-10.0,
+        max_value=20.0,
+        value=4.0,
+        step=0.5,
+        help="Used to project daily transient ADR before the app recommends a group rate.",
+    )
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -430,7 +433,6 @@ elif st.session_state.step == 2:
                 "pace_otb": pace_otb,
                 "pace_stly": pace_stly,
                 "adr_growth_pct": adr_growth_pct,
-                "proposed_rate": proposed_rate,
                 "forecast_input_method": forecast_input_method,
             }
             st.session_state.results = run_pricing_engine(sd, market_data)
@@ -453,9 +455,9 @@ elif st.session_state.step == 3:
     with c1:
         st.markdown(f"""
         <div class="result-card result-min">
-            <div class="result-label">Proposed Group Rate</div>
-            <div class="result-rate">${r['proposed_rate']:,.0f}</div>
-            <div class="result-desc">Applied to each group room night.</div>
+            <div class="result-label">Recommended Group Rate</div>
+            <div class="result-rate">${r['recommended_rate']:,.0f}</div>
+            <div class="result-desc">Calculated from daily demand, ADR history, displacement, pace, and STR signals.</div>
         </div>""", unsafe_allow_html=True)
     with c2:
         st.markdown(f"""
@@ -479,7 +481,7 @@ elif st.session_state.step == 3:
     m1, m2, m3, m4, m5 = st.columns(5)
     metrics = [
         ("Total Group Room-Nights", f"{r['total_room_nights']:,}"),
-        ("Group Revenue", f"${r['group_rev_proposed']:,.0f}"),
+        ("Group Revenue", f"${r['group_rev_recommended']:,.0f}"),
         ("Displaced Room-Nights", f"{r['displaced_room_nights']:,}"),
         ("Displaced Revenue", f"${r['displaced_revenue']:,.0f}"),
         ("Pace vs STLY", f"{r['pace_variance']:+.0f} rooms"),
@@ -509,7 +511,7 @@ elif st.session_state.step == 3:
         <strong>{title}</strong><br>
         Daily inventory math shows <strong>{r['displaced_room_nights']:,} displaced room-nights</strong>
         worth <strong>${r['displaced_revenue']:,.0f}</strong> in transient revenue opportunity cost.
-        Group revenue at the proposed rate is <strong>${r['group_rev_proposed']:,.0f}</strong>.
+        Group revenue at the recommended rate is <strong>${r['group_rev_recommended']:,.0f}</strong>.
     </div>
     """, unsafe_allow_html=True)
 
@@ -522,10 +524,10 @@ elif st.session_state.step == 3:
             "Total Group Revenue",
             "Total Displaced Transient Revenue",
             "Net Revenue Position",
-            "Proposed Rate vs Weighted Transient ADR",
+            "Recommended Rate vs Weighted Transient ADR",
         ],
         "Value": [
-            f"${r['group_rev_proposed']:,.0f}",
+            f"${r['group_rev_recommended']:,.0f}",
             f"-${r['displaced_revenue']:,.0f}",
             f"${r['net_revenue_position']:+,.0f}",
             f"{r['rate_vs_transient_pct']:.1f}% (${r['rate_vs_transient_gap']:+,.0f})",
@@ -535,7 +537,7 @@ elif st.session_state.step == 3:
     with st.expander("🧮 See Daily Calculation Logic", expanded=False):
         years = md["years"]
         growth = md["adr_growth_pct"]
-        proposed_rate = r["proposed_rate"]
+        recommended_rate = r["recommended_rate"]
 
         for idx, row in enumerate(r["daily_results"], start=1):
             hist_adr = row["hist_adr"]
@@ -556,8 +558,16 @@ elif st.session_state.step == 3:
                     Projected transient ADR:<br>
                     ${row['avg_hist_adr']:,.2f} × (1 + {row['yoy_trend']:+.2f}% ÷ 100) = ${row['after_yoy_trend_adr']:,.2f}<br>
                     ${row['after_yoy_trend_adr']:,.2f} × (1 + {growth:+.1f}% ÷ 100) = ${row['projected_transient_adr']:,.2f}<br><br>
+                    Daily rate recommendation signal:<br>
+                    Base group multiplier: {row['base_group_multiplier']:.0%}<br>
+                    Occupancy adjustment ({row['forecast_occ_pct']:.1f}% forecast): {row['occupancy_adjustment']:+.3f}<br>
+                    Displacement adjustment ({row['displaced_share']:.1f}% of block displaced): {row['displacement_adjustment']:+.3f}<br>
+                    Pace adjustment ({r['pace_variance']:+.0f} rooms vs STLY): {row['pace_adjustment']:+.3f}<br>
+                    STR adjustment (MPI {md['str_mpi']:.1f}, ARI {md['str_ari']:.1f}): {row['str_adjustment']:+.3f}<br>
+                    Final daily multiplier: {row['rate_multiplier']:.1%}<br>
+                    Daily indicated rate: ${row['projected_transient_adr']:,.2f} × {row['rate_multiplier']:.1%} = ${row['daily_recommended_rate']:,.2f}<br><br>
                     Group revenue:<br>
-                    {row['group_rooms']} rooms × ${proposed_rate:,.2f} = ${row['group_revenue']:,.2f}<br><br>
+                    {row['group_rooms']} rooms × ${recommended_rate:,.2f} = ${row['group_revenue']:,.2f}<br><br>
                     Displaced rooms:<br>
                     max(({row['forecasted_transient_rooms']} forecasted transient rooms + {row['group_rooms']} group rooms) - {row['hotel_capacity']} hotel capacity, 0)
                     = {row['displaced_rooms']} rooms<br><br>
@@ -579,10 +589,11 @@ elif st.session_state.step == 3:
             <div class="calc-step-title">Summed Daily Results</div>
             <div class="calc-formula">
                 Total group room-nights = {' + '.join(str(row['group_rooms']) for row in r['daily_results'])} = {r['total_room_nights']}<br>
-                Total group revenue = {' + '.join(f"${row['group_revenue']:,.0f}" for row in r['daily_results'])} = ${r['group_rev_proposed']:,.0f}<br>
+                Total group revenue = {' + '.join(f"${row['group_revenue']:,.0f}" for row in r['daily_results'])} = ${r['group_rev_recommended']:,.0f}<br>
                 Total displaced room-nights = {' + '.join(str(row['displaced_rooms']) for row in r['daily_results'])} = {r['displaced_room_nights']}<br>
                 Total displaced revenue = {' + '.join(f"${row['displaced_revenue']:,.0f}" for row in r['daily_results'])} = ${r['displaced_revenue']:,.0f}<br>
-                Net revenue position = ${r['group_rev_proposed']:,.0f} - ${r['displaced_revenue']:,.0f} = ${r['net_revenue_position']:+,.0f}
+                Recommended group rate = weighted average of daily indicated rates, rounded up to nearest $5 = ${r['recommended_rate']:,.0f}<br>
+                Net revenue position = ${r['group_rev_recommended']:,.0f} - ${r['displaced_revenue']:,.0f} = ${r['net_revenue_position']:+,.0f}
             </div>
             <div class="calc-note">Displacement is based only on hotel capacity, forecasted transient rooms, and daily group rooms.</div>
         </div>
