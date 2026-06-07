@@ -16,19 +16,17 @@ The app has **3 steps**:
 
 ```
 For each stay date:
-3-yr avg ADR
-  × (1 + historical YoY ADR trend %)
-  × (1 + manager's growth assumption %)
-= Daily Projected Transient ADR  ← rate anchor
+3-yr avg historical group ADR
+  × (1 + historical group ADR YoY trend %)
+  × (1 + desired group ADR growth %)
+= Daily indicated group rate
 
 App recommends a group rate
-  based on weighted projected transient ADR, displacement pressure, pace, and STR signals
-  daily indicated rate = projected transient ADR × adjusted group multiplier
-  final recommended rate = weighted average of daily indicated rates, rounded up to nearest $5
+  final recommended rate = weighted average of daily indicated group rates, rounded up to nearest $5
 
 Displacement math:
-  Daily displaced rooms = max((forecasted transient rooms + daily group rooms) - hotel capacity, 0)
-  Daily displaced revenue = daily displaced rooms × daily projected transient ADR
+  Daily displaced rooms = max((PMS forecast rooms + daily group rooms) - hotel capacity, 0)
+  Daily displaced revenue = daily displaced rooms × PMS forecast ADR
   Totals are summed across stay dates
 ```
 
@@ -90,8 +88,8 @@ streamlit run app.py
 
 | Source | Fields |
 |--------|--------|
-| PMS / history | Daily occupancy % + ADR for each stay date in prior 3 years |
-| Current forecast | Daily forecasted occupancy % or transient rooms + ADR on books |
+| PMS / history | Daily historical group occupancy % + group ADR for each stay date in prior 3 years |
+| Current forecast | Daily PMS forecast occupancy % or rooms + PMS forecast ADR |
 | STR Report | MPI, ARI, comp set occupancy % |
 | Pace report | Rooms on books now vs. same time last year |
 | Manager judgment | Expected ADR growth % |
@@ -100,7 +98,7 @@ streamlit run app.py
 
 ## Output
 
-- **Recommended rate analysis**: calculated group rate vs. projected transient ADR
+- **Recommended rate analysis**: calculated group rate vs. PMS forecast ADR
 - **Daily displacement table**: stay date, group rooms, forecast, demand, capacity, displaced rooms, ADR, revenue, and net position
 - **Displacement analysis**: total displaced room-nights, displaced revenue, and net impact
 - **PDF report**: downloadable daily displacement report for proposals / sales communication

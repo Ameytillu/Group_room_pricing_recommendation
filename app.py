@@ -179,13 +179,12 @@ def daily_results_df(results: dict) -> pd.DataFrame:
         {
             "Stay Date": format_date(row["stay_date"]),
             "Group Rooms": row["group_rooms"],
-            "Forecasted Transient Rooms": row["forecasted_transient_rooms"],
+            "PMS Forecast Rooms": row["pms_forecast_rooms"],
             "Total Demand After Group": row["total_demand_after_group"],
             "Hotel Capacity": row["hotel_capacity"],
             "Displaced Rooms": row["displaced_rooms"],
-            "Current ADR on Books": f"${row['current_adr_on_books']:,.0f}",
-            "Projected Transient ADR": f"${row['projected_transient_adr']:,.0f}",
-            "Daily Indicated Rate": f"${row['daily_recommended_rate']:,.0f}",
+            "PMS Forecast ADR": f"${row['pms_forecast_adr']:,.0f}",
+            "Daily Indicated Group Rate": f"${row['daily_indicated_group_rate']:,.0f}",
             "Group Revenue": f"${row['group_revenue']:,.0f}",
             "Displaced Revenue": f"${row['displaced_revenue']:,.0f}",
             "Net Revenue Position": f"${row['net_revenue_position']:+,.0f}",
@@ -320,7 +319,7 @@ elif st.session_state.step == 2:
     with c_mode:
         forecast_input_method = st.radio(
             "Forecast input method",
-            ["Forecasted Occupancy %", "Forecasted Transient Rooms"],
+            ["Forecasted Occupancy %", "PMS Forecast Rooms"],
             horizontal=True,
         )
 
@@ -328,15 +327,15 @@ elif st.session_state.step == 2:
         {
             "Stay Date": day,
             "Group Rooms": 30,
-            f"{years[0]} Occupancy %": 72.0,
-            f"{years[0]} ADR": 165.0,
-            f"{years[1]} Occupancy %": 72.0,
-            f"{years[1]} ADR": 170.0,
-            f"{years[2]} Occupancy %": 72.0,
-            f"{years[2]} ADR": 176.0,
+            f"{years[0]} Group Occupancy %": 72.0,
+            f"{years[0]} Group ADR": 165.0,
+            f"{years[1]} Group Occupancy %": 72.0,
+            f"{years[1]} Group ADR": 170.0,
+            f"{years[2]} Group Occupancy %": 72.0,
+            f"{years[2]} Group ADR": 176.0,
             "Forecasted Occupancy %": 68.0,
-            "Forecasted Transient Rooms": round(0.68 * total_rooms),
-            "Current ADR on Books": 178.0,
+            "PMS Forecast Rooms": round(0.68 * total_rooms),
+            "PMS Forecast ADR": 178.0,
         }
         for day in dates
     ])
@@ -350,16 +349,16 @@ elif st.session_state.step == 2:
             "Stay Date": st.column_config.DateColumn("Stay Date", format="MM/DD/YYYY"),
             "Group Rooms": st.column_config.NumberColumn("Group Rooms", min_value=0, step=1),
             "Forecasted Occupancy %": st.column_config.NumberColumn("Forecasted Occupancy %", min_value=0.0, max_value=100.0, step=0.1),
-            "Forecasted Transient Rooms": st.column_config.NumberColumn("Forecasted Transient Rooms", min_value=0, step=1),
-            "Current ADR on Books": st.column_config.NumberColumn("Current ADR on Books", min_value=0.0, step=1.0),
+            "PMS Forecast Rooms": st.column_config.NumberColumn("PMS Forecast Rooms", min_value=0, step=1),
+            "PMS Forecast ADR": st.column_config.NumberColumn("PMS Forecast ADR", min_value=0.0, step=1.0),
         },
         key=f"daily_inputs_{sd['arrival_date']}_{sd['departure_date']}_{total_rooms}",
     )
 
     if forecast_input_method == "Forecasted Occupancy %":
-        st.caption("Forecasted transient rooms will be calculated as round(forecasted occupancy % × hotel rooms).")
+        st.caption("PMS forecast rooms will be calculated as round(forecasted occupancy % × hotel rooms).")
     else:
-        st.caption("Forecasted transient rooms will use the room counts entered in the table.")
+        st.caption("PMS forecast rooms will use the room counts entered in the table.")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -384,12 +383,12 @@ elif st.session_state.step == 2:
         pace_stly = st.number_input("Rooms on Books STLY", min_value=0, max_value=50000, value=195, step=1)
 
     adr_growth_pct = st.slider(
-        "Expected ADR Growth % vs Last Year",
+        "Desired Group ADR Growth % vs Last Year",
         min_value=-10.0,
         max_value=20.0,
         value=4.0,
         step=0.5,
-        help="Used to project daily transient ADR before the app recommends a group rate.",
+        help="Used only for group ADR positioning. PMS Forecast ADR is used for displacement.",
     )
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -406,23 +405,22 @@ elif st.session_state.step == 2:
                 if forecast_input_method == "Forecasted Occupancy %":
                     forecast_rooms = int(round((float(row["Forecasted Occupancy %"]) / 100) * total_rooms))
                 else:
-                    forecast_rooms = int(round(row["Forecasted Transient Rooms"]))
+                    forecast_rooms = int(round(row["PMS Forecast Rooms"]))
                 daily_inputs.append({
                     "stay_date": row["Stay Date"],
                     "group_rooms": int(round(row["Group Rooms"])),
                     "hist_occ": [
-                        float(row[f"{years[0]} Occupancy %"]),
-                        float(row[f"{years[1]} Occupancy %"]),
-                        float(row[f"{years[2]} Occupancy %"]),
+                        float(row[f"{years[0]} Group Occupancy %"]),
+                        float(row[f"{years[1]} Group Occupancy %"]),
+                        float(row[f"{years[2]} Group Occupancy %"]),
                     ],
                     "hist_adr": [
-                        float(row[f"{years[0]} ADR"]),
-                        float(row[f"{years[1]} ADR"]),
-                        float(row[f"{years[2]} ADR"]),
+                        float(row[f"{years[0]} Group ADR"]),
+                        float(row[f"{years[1]} Group ADR"]),
+                        float(row[f"{years[2]} Group ADR"]),
                     ],
-                    "forecast_occ": float(row["Forecasted Occupancy %"]),
-                    "forecasted_transient_rooms": forecast_rooms,
-                    "curr_adr": float(row["Current ADR on Books"]),
+                    "pms_forecast_rooms": forecast_rooms,
+                    "pms_forecast_adr": float(row["PMS Forecast ADR"]),
                 })
 
             market_data = {
@@ -459,14 +457,14 @@ elif st.session_state.step == 3:
         <div class="result-card result-min">
             <div class="result-label">Recommended Group Rate</div>
             <div class="result-rate">${r['recommended_rate']:,.0f}</div>
-            <div class="result-desc">Calculated from daily demand, ADR history, displacement, pace, and STR signals.</div>
+            <div class="result-desc">Calculated from historical group ADR trend and desired group ADR growth.</div>
         </div>""", unsafe_allow_html=True)
     with c2:
         st.markdown(f"""
         <div class="result-card result-rec">
-            <div class="result-label">Weighted Transient ADR</div>
-            <div class="result-rate">${r['proj_transient_adr']:,.0f}</div>
-            <div class="result-desc">Weighted by daily group rooms.</div>
+            <div class="result-label">Weighted PMS Forecast ADR</div>
+            <div class="result-rate">${r['weighted_pms_forecast_adr']:,.0f}</div>
+            <div class="result-desc">Used only for displaced revenue.</div>
         </div>""", unsafe_allow_html=True)
     with c3:
         net_css = "result-min" if r["net_revenue_position"] >= 0 else "result-str"
@@ -524,15 +522,15 @@ elif st.session_state.step == 3:
     st.dataframe(pd.DataFrame({
         "Metric": [
             "Total Group Revenue",
-            "Total Displaced Transient Revenue",
+            "Total Displaced Revenue",
             "Net Revenue Position",
-            "Recommended Rate vs Weighted Transient ADR",
+            "Recommended Rate vs Weighted PMS Forecast ADR",
         ],
         "Value": [
             f"${r['group_rev_recommended']:,.0f}",
             f"-${r['displaced_revenue']:,.0f}",
             f"${r['net_revenue_position']:+,.0f}",
-            f"{r['rate_vs_transient_pct']:.1f}% (${r['rate_vs_transient_gap']:+,.0f})",
+            f"{r['rate_vs_forecast_adr_pct']:.1f}% (${r['rate_vs_forecast_adr_gap']:+,.0f})",
         ],
     }), use_container_width=True, hide_index=True)
 
@@ -549,34 +547,33 @@ elif st.session_state.step == 3:
                 <div class="calc-step-num">Stay Date {idx}</div>
                 <div class="calc-step-title">{format_date(row['stay_date'])}</div>
                 <div class="calc-formula">
-                    Historical ADR baseline:<br>
+                    <strong>1. Group Rate Positioning</strong><br>
+                    Uses historical group ADR, historical group occupancy, group ADR trend, desired group ADR growth %, MPI, ARI, and pace.<br><br>
+                    Historical group ADR baseline:<br>
                     (${hist_adr[0]:,.2f} + ${hist_adr[1]:,.2f} + ${hist_adr[2]:,.2f}) ÷ 3 = ${row['avg_hist_adr']:,.2f}<br><br>
-                    Historical occupancy baseline:<br>
+                    Historical group occupancy baseline:<br>
                     ({hist_occ[0]:.1f}% + {hist_occ[1]:.1f}% + {hist_occ[2]:.1f}%) ÷ 3 = {row['avg_hist_occ']:.1f}%<br><br>
-                    YoY ADR trend:<br>
+                    Group ADR YoY trend:<br>
                     {years[0]} to {years[1]}: (${hist_adr[1]:,.2f} - ${hist_adr[0]:,.2f}) ÷ ${hist_adr[0]:,.2f} = {row['yoy_1']:+.2f}%<br>
                     {years[1]} to {years[2]}: (${hist_adr[2]:,.2f} - ${hist_adr[1]:,.2f}) ÷ ${hist_adr[1]:,.2f} = {row['yoy_2']:+.2f}%<br>
                     Average YoY trend: ({row['yoy_1']:+.2f}% + {row['yoy_2']:+.2f}%) ÷ 2 = {row['yoy_trend']:+.2f}%<br><br>
-                    Historical projected transient ADR:<br>
-                    ${row['avg_hist_adr']:,.2f} × (1 + {row['yoy_trend']:+.2f}% ÷ 100) = ${row['after_yoy_trend_adr']:,.2f}<br>
-                    ${row['after_yoy_trend_adr']:,.2f} × (1 + {growth:+.1f}% ÷ 100) = ${row['historical_projected_adr']:,.2f}<br>
-                    Projected transient ADR = max(${row['historical_projected_adr']:,.2f}, current ADR on books ${row['current_adr_on_books']:,.2f})
-                    = ${row['projected_transient_adr']:,.2f}<br><br>
-                    Daily rate recommendation signal:<br>
-                    Base group multiplier: {row['base_group_multiplier']:.0%}<br>
-                    Occupancy adjustment ({row['forecast_occ_pct']:.1f}% forecast): {row['occupancy_adjustment']:+.3f}<br>
-                    Displacement adjustment ({row['displaced_share']:.1f}% of block displaced): {row['displacement_adjustment']:+.3f}<br>
-                    Pace adjustment ({r['pace_variance']:+.0f} rooms vs STLY): {row['pace_adjustment']:+.3f}<br>
-                    STR adjustment (MPI {md['str_mpi']:.1f}, ARI {md['str_ari']:.1f}, comp occ {md['str_comp_occ']:.1f}%): {row['str_adjustment']:+.3f}<br>
-                    Final daily multiplier: {row['rate_multiplier']:.1%}<br>
-                    Daily indicated rate: ${row['projected_transient_adr']:,.2f} × {row['rate_multiplier']:.1%} = ${row['daily_recommended_rate']:,.2f}<br><br>
+                    Indicated Group Rate:<br>
+                    ${row['avg_hist_adr']:,.2f} × (1 + {row['yoy_trend']:+.2f}% ÷ 100) = ${row['after_group_yoy_trend_adr']:,.2f}<br>
+                    ${row['after_group_yoy_trend_adr']:,.2f} × (1 + {growth:+.1f}% ÷ 100) = ${row['daily_indicated_group_rate']:,.2f}<br><br>
+                    Market signals:<br>
+                    Historical group occupancy: {row['avg_hist_occ']:.1f}%<br>
+                    Pace: {r['pace_variance']:+.0f} rooms vs STLY<br>
+                    STR: MPI {md['str_mpi']:.1f}, ARI {md['str_ari']:.1f}, comp occ {md['str_comp_occ']:.1f}%<br><br>
+
+                    <strong>2. Displacement Analysis</strong><br>
+                    Uses PMS forecast rooms, PMS forecast ADR, hotel capacity, and daily group rooms only.<br><br>
                     Group revenue:<br>
                     {row['group_rooms']} rooms × ${recommended_rate:,.2f} = ${row['group_revenue']:,.2f}<br><br>
                     Displaced rooms:<br>
-                    max(({row['forecasted_transient_rooms']} forecasted transient rooms + {row['group_rooms']} group rooms) - {row['hotel_capacity']} hotel capacity, 0)
+                    max(({row['pms_forecast_rooms']} PMS forecast rooms + {row['group_rooms']} daily group rooms) - {row['hotel_capacity']} hotel capacity, 0)
                     = {row['displaced_rooms']} rooms<br><br>
                     Displaced revenue:<br>
-                    {row['displaced_rooms']} displaced rooms × ${row['projected_transient_adr']:,.2f} = ${row['displaced_revenue']:,.2f}<br><br>
+                    {row['displaced_rooms']} displaced rooms × ${row['pms_forecast_adr']:,.2f} PMS forecast ADR = ${row['displaced_revenue']:,.2f}<br><br>
                     Net revenue position:<br>
                     ${row['group_revenue']:,.2f} - ${row['displaced_revenue']:,.2f} = ${row['net_revenue_position']:+,.2f}
                 </div>
@@ -596,10 +593,10 @@ elif st.session_state.step == 3:
                 Total group revenue = {' + '.join(f"${row['group_revenue']:,.0f}" for row in r['daily_results'])} = ${r['group_rev_recommended']:,.0f}<br>
                 Total displaced room-nights = {' + '.join(str(row['displaced_rooms']) for row in r['daily_results'])} = {r['displaced_room_nights']}<br>
                 Total displaced revenue = {' + '.join(f"${row['displaced_revenue']:,.0f}" for row in r['daily_results'])} = ${r['displaced_revenue']:,.0f}<br>
-                Recommended group rate = weighted average of daily indicated rates, rounded up to nearest $5 = ${r['recommended_rate']:,.0f}<br>
+                Recommended group rate = weighted average of daily indicated group rates, rounded up to nearest $5 = ${r['recommended_rate']:,.0f}<br>
                 Net revenue position = ${r['group_rev_recommended']:,.0f} - ${r['displaced_revenue']:,.0f} = ${r['net_revenue_position']:+,.0f}
             </div>
-            <div class="calc-note">Displacement is based only on hotel capacity, forecasted transient rooms, and daily group rooms.</div>
+            <div class="calc-note">Displacement is based only on PMS forecast rooms, PMS forecast ADR, hotel capacity, and daily group rooms.</div>
         </div>
         """, unsafe_allow_html=True)
 
