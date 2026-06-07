@@ -10,7 +10,7 @@ The app has **3 steps**:
 
 1. **Sales Team** enters group details (name, dates, room block)
 2. **Revenue Manager** enters market data (3-yr history, STR, pace, forecast)
-3. **App outputs** three rate tiers + displacement analysis + downloadable PDF
+3. **App evaluates** the manager's proposed rate + displacement analysis + downloadable PDF
 
 ### Pricing Logic
 
@@ -20,13 +20,14 @@ The app has **3 steps**:
   × (1 + manager's growth assumption %)
 = Projected Transient ADR  ← rate anchor
 
-Rate tiers = Projected Transient ADR × strategy multipliers
-  adjusted for: forecasted occupancy | STR MPI/ARI | pace vs STLY
+Manager enters proposed group rate
+  compared against projected transient ADR for context
 
 Displacement math:
   Displaced room-nights = group block that exceeds 95% occ threshold
   Displaced revenue     = displaced room-nights × projected transient ADR
-  Group revenue         = block × nights × suggested rate
+  Group revenue         = block × nights × proposed rate
+  Net revenue position  = group revenue − displaced transient revenue
 ```
 
 ---
@@ -91,13 +92,13 @@ streamlit run app.py
 | Current forecast | Forecasted occupancy % + ADR on books for group dates |
 | STR Report | MPI, ARI, comp set occupancy % |
 | Pace report | Rooms on books now vs. same time last year |
-| Manager judgment | Expected ADR growth %, revenue strategy |
+| Manager judgment | Expected ADR growth %, proposed group rate |
 
 ---
 
 ## Output
 
-- **3 rate tiers**: Minimum / Recommended / Stretch
+- **Proposed rate analysis**: group rate vs. projected transient ADR
 - **Displacement analysis**: displaced room-nights, displaced revenue, net impact
 - **Revenue comparison table**: group revenue vs. transient revenue at each tier
 - **PDF report**: downloadable one-pager for proposals / sales communication

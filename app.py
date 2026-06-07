@@ -301,7 +301,7 @@ elif st.session_state.step == 2:
     st.markdown("""
     <div class="step-card">
         <div class="step-label">Manager Assumptions</div>
-        <div class="step-title">Rate Growth & Strategy</div>
+        <div class="step-title">Rate Growth & Proposed Group Rate</div>
     """, unsafe_allow_html=True)
 
     c1, c2 = st.columns(2)
@@ -310,9 +310,9 @@ elif st.session_state.step == 2:
                                    max_value=20.0, value=4.0, step=0.5,
                                    help="Your market judgment on rate trend for these dates")
     with c2:
-        strategy = st.selectbox("Revenue Strategy for These Dates",
-                                ["Balanced (default)", "Protect Occupancy", "Maximize Rate"],
-                                help="Shifts the rate multipliers used in suggestions")
+        proposed_rate = st.number_input("Manager Proposed Group Rate ($)", min_value=0.0,
+                                        max_value=5000.0, value=160.0, step=5.0,
+                                        help="The group rate you want to evaluate against transient ADR and displacement.")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -336,7 +336,7 @@ elif st.session_state.step == 2:
                 "pace_otb":       pace_otb,
                 "pace_stly":      pace_stly,
                 "adr_growth_pct": adr_growth_pct,
-                "strategy":       strategy,
+                "proposed_rate":   proposed_rate,
             }
             st.session_state.results = run_pricing_engine(st.session_state.sales_data, market_data)
             st.session_state.market_data = market_data
@@ -358,28 +358,29 @@ elif st.session_state.step == 3:
         <div class="step-title">Group Rate Recommendations — {sd['group_name']}</div>
     """, unsafe_allow_html=True)
 
-    # Rate cards
+    # Rate analysis cards
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown(f"""
         <div class="result-card result-min">
-            <div class="result-label">🟢 Minimum Acceptable</div>
-            <div class="result-rate">${r['rate_min']:,.0f}</div>
-            <div class="result-desc">Floor rate — covers variable cost & avoids displacement loss. Use only for low-risk, low-occ dates or strategic accounts.</div>
+            <div class="result-label">🟢 Proposed Group Rate</div>
+            <div class="result-rate">${r['proposed_rate']:,.0f}</div>
+            <div class="result-desc">Manager-entered rate being evaluated against transient ADR and displacement risk.</div>
         </div>""", unsafe_allow_html=True)
     with c2:
         st.markdown(f"""
         <div class="result-card result-rec">
-            <div class="result-label">🔵 Recommended Rate</div>
-            <div class="result-rate">${r['rate_rec']:,.0f}</div>
-            <div class="result-desc">Optimal balance of group competitiveness vs. transient revenue protection. Start negotiations here.</div>
+            <div class="result-label">🔵 Projected Transient ADR</div>
+            <div class="result-rate">${r['proj_transient_adr']:,.0f}</div>
+            <div class="result-desc">Informational rate anchor based on historical ADR trend and manager growth assumption.</div>
         </div>""", unsafe_allow_html=True)
     with c3:
+        net_css = "result-min" if r["net_revenue_position"] >= 0 else "result-str"
         st.markdown(f"""
-        <div class="result-card result-str">
-            <div class="result-label">🔴 Stretch Rate</div>
-            <div class="result-rate">${r['rate_stretch']:,.0f}</div>
-            <div class="result-desc">Push here when occupancy forecast is strong (>75%). Near transient parity — justified by high displacement risk.</div>
+        <div class="result-card {net_css}">
+            <div class="result-label">{'🟢' if r['net_revenue_position'] >= 0 else '🔴'} Net Revenue Position</div>
+            <div class="result-rate">${r['net_revenue_position']:,.0f}</div>
+            <div class="result-desc">Proposed group revenue minus displaced transient revenue opportunity cost.</div>
         </div>""", unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -409,11 +410,11 @@ elif st.session_state.step == 3:
         st.markdown(f"""
         <div class="disp-warn">
             <strong>⚠️ High Displacement Risk</strong><br>
-            Accepting this group at minimum rate would displace an estimated
+            Accepting this group at the proposed rate would displace an estimated
             <strong>{r['displaced_room_nights']} transient room-nights</strong> worth
             <strong>${r['displaced_revenue']:,.0f}</strong> in transient revenue.
-            Group revenue at recommended rate: <strong>${r['group_rev_rec']:,.0f}</strong>.
-            {f"<br><strong>Net displacement cost at min rate: ${r['displacement_cost']:,.0f}</strong>" if r['displacement_cost'] > 0 else ""}
+            Group revenue at proposed rate: <strong>${r['group_rev_proposed']:,.0f}</strong>.
+            {f"<br><strong>Net displacement cost: ${r['displacement_cost']:,.0f}</strong>" if r['displacement_cost'] > 0 else ""}
         </div>""", unsafe_allow_html=True)
     elif r["displacement_risk"] == "MEDIUM":
         st.markdown(f"""
@@ -422,27 +423,25 @@ elif st.session_state.step == 3:
             This group would displace an estimated
             <strong>{r['displaced_room_nights']} transient room-nights</strong> worth
             <strong>${r['displaced_revenue']:,.0f}</strong> in transient revenue.
-            Group revenue at recommended rate: <strong>${r['group_rev_rec']:,.0f}</strong>.
+            Group revenue at proposed rate: <strong>${r['group_rev_proposed']:,.0f}</strong>.
         </div>""", unsafe_allow_html=True)
     else:
         st.markdown(f"""
         <div class="disp-ok">
             <strong>✅ Low Displacement Risk</strong><br>
             Current occupancy forecast ({md['curr_occ']:.1f}%) leaves sufficient transient capacity.
-            Group revenue at recommended rate: <strong>${r['group_rev_rec']:,.0f}</strong>.
+            Group revenue at proposed rate: <strong>${r['group_rev_proposed']:,.0f}</strong>.
         </div>""", unsafe_allow_html=True)
 
     # Revenue comparison table
     st.markdown("#### Revenue Impact Summary")
     rev_df = pd.DataFrame({
-        "Scenario":          ["Minimum Rate", "Recommended Rate", "Stretch Rate"],
-        "Rate/Night":        [f"${r['rate_min']:,.0f}", f"${r['rate_rec']:,.0f}", f"${r['rate_stretch']:,.0f}"],
-        "Total Group Rev":   [f"${r['group_rev_min']:,.0f}", f"${r['group_rev_rec']:,.0f}", f"${r['group_rev_str']:,.0f}"],
-        "vs. Transient Rev": [
-            f"${r['group_rev_min'] - r['displaced_revenue']:+,.0f}",
-            f"${r['group_rev_rec'] - r['displaced_revenue']:+,.0f}",
-            f"${r['group_rev_str'] - r['displaced_revenue']:+,.0f}",
-        ]
+        "Scenario":              ["Proposed Rate"],
+        "Rate/Night":            [f"${r['proposed_rate']:,.0f}"],
+        "Total Group Rev":       [f"${r['group_rev_proposed']:,.0f}"],
+        "Displaced Transient Rev": [f"${r['displaced_revenue']:,.0f}"],
+        "Net Revenue Position":  [f"${r['net_revenue_position']:+,.0f}"],
+        "Rate vs. Transient ADR": [f"{r['rate_vs_transient_pct']:.1f}%"],
     })
     st.dataframe(rev_df, use_container_width=True, hide_index=True)
 
@@ -559,51 +558,28 @@ elif st.session_state.step == 3:
                 ${avg_adr:,.2f} × (1 + {yoy:+.2f}%) = ${after_trend:,.2f} &nbsp;[after historical trend]<br>
                 ${after_trend:,.2f} × (1 + {growth:+.1f}%) = ${proj:,.2f} &nbsp;[after manager growth assumption]
             </div>
-            <div class="calc-result">= ${proj:,.2f} &nbsp;&nbsp;← All rate tiers are anchored to this</div>
-            <div class="calc-note">This is what a transient guest would likely pay on these dates — your group rate is set relative to this.</div>
+            <div class="calc-result">= ${proj:,.2f} &nbsp;&nbsp;← Transient rate anchor for context</div>
+            <div class="calc-note">This is what a transient guest would likely pay on these dates. The proposed group rate is entered by the manager, not generated by the engine.</div>
         </div>
         """, unsafe_allow_html=True)
 
-        # ── Step 4: Multiplier adjustments ───────────────────────────────
-        from utils.pricing_engine import (
-            _STRATEGY_MULTIPLIERS, _occupancy_multiplier_adjustment,
-            _pace_adjustment, _str_adjustment
-        )
-        base_min, base_rec, base_str = _STRATEGY_MULTIPLIERS[md['strategy']]
-        occ_adj  = _occupancy_multiplier_adjustment(md['curr_occ'])
-        pace_adj = _pace_adjustment(md['pace_otb'], md['pace_stly'])
-        str_adj  = _str_adjustment(md['str_mpi'], md['str_ari'])
-        total_adj = occ_adj + pace_adj + str_adj
-
-        def adj_tag(label, val):
-            css = "adj-tag-ok" if val > 0 else ("adj-tag-warn" if val < 0 else "adj-tag")
-            sign = "+" if val >= 0 else ""
-            return f'<span class="adj-tag {css}">{label}: {sign}{val:.3f}</span>'
-
+        # ── Step 4: Proposed rate position ───────────────────────────────
         st.markdown(f"""
         <div class="calc-box">
             <div class="calc-step-num">Step 4 of 5</div>
-            <div class="calc-step-title">Rate Multiplier Adjustments</div>
+            <div class="calc-step-title">Proposed Rate Position</div>
             <div class="calc-formula">
-                Base multipliers ({md['strategy']}): Min {base_min:.0%} | Rec {base_rec:.0%} | Stretch {base_str:.0%}<br><br>
-                Adjustments applied:<br>
-                &nbsp;&nbsp;Occupancy signal ({md['curr_occ']:.1f}%):  {occ_adj:+.3f}<br>
-                &nbsp;&nbsp;Pace vs STLY ({r['pace_variance']:+.0f} rooms):    {pace_adj:+.3f}<br>
-                &nbsp;&nbsp;STR MPI/ARI ({md['str_mpi']:.1f} / {md['str_ari']:.1f}):    {str_adj:+.3f}<br>
-                &nbsp;&nbsp;────────────────────────────────<br>
-                &nbsp;&nbsp;Total adjustment:            {total_adj:+.3f}<br><br>
-                Final multipliers: Min {r['mult_min']:.0%} | Rec {r['mult_rec']:.0%} | Stretch {r['mult_str']:.0%}
+                Proposed group rate: ${r['proposed_rate']:,.2f}<br>
+                Projected transient ADR: ${proj:,.2f}<br>
+                Proposed rate ÷ transient ADR = {r['rate_vs_transient_pct']:.1f}%<br>
+                Proposed rate gap: ${r['rate_vs_transient_gap']:+,.2f}
             </div>
-            <div style="margin-top:0.5rem;">
-                {adj_tag("Occupancy", occ_adj)}
-                {adj_tag("Pace", pace_adj)}
-                {adj_tag("STR", str_adj)}
-            </div>
-            <div class="calc-note" style="margin-top:0.5rem;">Multipliers represent group rate as a % of transient ADR — groups get a discount because they remove OTA commission risk (~15–18%).</div>
+            <div class="calc-result">Proposed rate is {r['rate_vs_transient_pct']:.1f}% of projected transient ADR</div>
+            <div class="calc-note">This is context only. The tool does not generate or override the manager's proposed rate.</div>
         </div>
         """, unsafe_allow_html=True)
 
-        # ── Step 5: Final rates & displacement ───────────────────────────
+        # ── Step 5: Proposed revenue & displacement ──────────────────────
         total_rooms   = md['total_rooms']
         nights        = sd['nights']
         room_block    = sd['room_block']
@@ -613,15 +589,12 @@ elif st.session_state.step == 3:
         displaced_rn  = r['displaced_room_nights']
 
         st.markdown(f"""
-        <div class="calc-box">
+            <div class="calc-box">
             <div class="calc-step-num">Step 5 of 5</div>
-            <div class="calc-step-title">Final Rates & Displacement Math</div>
+            <div class="calc-step-title">Proposed Revenue & Displacement Math</div>
             <div class="calc-formula">
-                — Rate Calculation —<br>
-                Min:     ${proj:,.2f} × {r['mult_min']:.0%} = <b>${r['rate_min']:,.0f}</b><br>
-                Rec:     ${proj:,.2f} × {r['mult_rec']:.0%} = <b>${r['rate_rec']:,.0f}</b><br>
-                Stretch: ${proj:,.2f} × {r['mult_str']:.0%} = <b>${r['rate_stretch']:,.0f}</b><br>
-                (rates rounded up to nearest $10)<br><br>
+                — Proposed Revenue —<br>
+                Group revenue: {room_block * nights} room-nights × ${r['proposed_rate']:,.2f} = <b>${r['group_rev_proposed']:,.0f}</b><br><br>
                 — Displacement Calculation —<br>
                 Fill threshold (95% occ): {round(0.95 * total_rooms)} rooms × {nights} nights = {fill_thresh} room-nights<br>
                 Currently on books:       {round((md['curr_occ']/100) * total_rooms)} rooms × {nights} nights = {otb_rn} room-nights<br>
@@ -631,7 +604,7 @@ elif st.session_state.step == 3:
                 Displaced revenue:        {displaced_rn} × ${proj:,.2f} = ${r['displaced_revenue']:,.0f}
             </div>
             <div class="calc-result">
-                Group rev @ Rec rate: {room_block * nights} × ${r['rate_rec']:,.0f} = ${r['group_rev_rec']:,.0f}
+                Net revenue position: ${r['net_revenue_position']:+,.0f}
                 &nbsp;&nbsp;|&nbsp;&nbsp;
                 Displacement risk: {r['displacement_risk']}
             </div>

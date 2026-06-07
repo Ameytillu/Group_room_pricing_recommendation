@@ -113,25 +113,21 @@ def generate_pdf_report(
     story.append(det_table)
     story.append(Spacer(1, 0.18 * inch))
 
-    # ── Rate recommendations ───────────────────────────────────────────────
-    story.append(Paragraph("Rate Recommendations", h2))
+    # ── Proposed rate analysis ─────────────────────────────────────────────
+    story.append(Paragraph("Proposed Rate Analysis", h2))
     story.append(HRFlowable(width="100%", thickness=1.5, color=BLUE, spaceAfter=6))
 
     r = results
     rate_rows = [
-        ["Scenario", "Rate / Night", "Total Group Revenue", "vs. Displaced Transient Rev"],
-        ["🟢  Minimum Acceptable",
-         f"${r['rate_min']:,.0f}",
-         f"${r['group_rev_min']:,.0f}",
-         f"${r['group_rev_min'] - r['displaced_revenue']:+,.0f}"],
-        ["🔵  Recommended Rate",
-         f"${r['rate_rec']:,.0f}",
-         f"${r['group_rev_rec']:,.0f}",
-         f"${r['group_rev_rec'] - r['displaced_revenue']:+,.0f}"],
-        ["🔴  Stretch Rate",
-         f"${r['rate_stretch']:,.0f}",
-         f"${r['group_rev_str']:,.0f}",
-         f"${r['group_rev_str'] - r['displaced_revenue']:+,.0f}"],
+        ["Scenario", "Rate / Night", "Total Group Revenue", "Net Revenue Position"],
+        ["Proposed Group Rate",
+         f"${r['proposed_rate']:,.0f}",
+         f"${r['group_rev_proposed']:,.0f}",
+         f"${r['net_revenue_position']:+,.0f}"],
+        ["Projected Transient ADR",
+         f"${r['proj_transient_adr']:,.0f}",
+         f"{r['rate_vs_transient_pct']:.1f}% of transient",
+         f"${r['rate_vs_transient_gap']:+,.0f} rate gap"],
     ]
     rate_table = Table(rate_rows, colWidths=[2.3*inch, 1.2*inch, 1.8*inch, 1.7*inch])
     rate_table.setStyle(TableStyle([
@@ -141,7 +137,7 @@ def generate_pdf_report(
         ("FONTSIZE",    (0, 0), (-1, -1), 8.5),
         ("FONTNAME",    (0, 1), (-1, -1), "Helvetica"),
         ("FONTNAME",    (1, 1), (1, -1), "Helvetica-Bold"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [LIGHT, colors.white, colors.HexColor("#FFF7ED")]),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [LIGHT, colors.white]),
         ("TOPPADDING",  (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
@@ -192,10 +188,10 @@ def generate_pdf_report(
         alert_color = colors.HexColor("#FFF1F2")
         border_color = colors.HexColor("#E11D48")
         alert_text = (
-            f"⚠️  <b>High Displacement Risk:</b> Accepting this group at minimum rate displaces "
+            f"⚠️  <b>High Displacement Risk:</b> Accepting this group at the proposed rate displaces "
             f"an estimated <b>{r['displaced_room_nights']} transient room-nights</b> "
             f"(${r['displaced_revenue']:,.0f} transient revenue). "
-            f"Recommend negotiating at or above the Recommended Rate."
+            f"Net revenue position: <b>${r['net_revenue_position']:+,.0f}</b>."
         )
     elif r["displacement_risk"] == "MEDIUM":
         alert_color = colors.HexColor("#FEF3C7")
