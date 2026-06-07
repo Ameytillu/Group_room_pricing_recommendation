@@ -197,6 +197,15 @@ def generate_pdf_report(
             f"(${r['displaced_revenue']:,.0f} transient revenue). "
             f"Recommend negotiating at or above the Recommended Rate."
         )
+    elif r["displacement_risk"] == "MEDIUM":
+        alert_color = colors.HexColor("#FEF3C7")
+        border_color = colors.HexColor("#D97706")
+        alert_text = (
+            f"⚠️  <b>Medium Displacement Risk:</b> Accepting this group displaces "
+            f"an estimated <b>{r['displaced_room_nights']} transient room-nights</b> "
+            f"(${r['displaced_revenue']:,.0f} transient revenue). "
+            f"Recommend validating the block against pickup expectations before confirming."
+        )
     else:
         alert_color = colors.HexColor("#F0FDF4")
         border_color = GREEN

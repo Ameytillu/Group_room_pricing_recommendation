@@ -415,6 +415,15 @@ elif st.session_state.step == 3:
             Group revenue at recommended rate: <strong>${r['group_rev_rec']:,.0f}</strong>.
             {f"<br><strong>Net displacement cost at min rate: ${r['displacement_cost']:,.0f}</strong>" if r['displacement_cost'] > 0 else ""}
         </div>""", unsafe_allow_html=True)
+    elif r["displacement_risk"] == "MEDIUM":
+        st.markdown(f"""
+        <div class="disp-warn">
+            <strong>⚠️ Medium Displacement Risk</strong><br>
+            This group would displace an estimated
+            <strong>{r['displaced_room_nights']} transient room-nights</strong> worth
+            <strong>${r['displaced_revenue']:,.0f}</strong> in transient revenue.
+            Group revenue at recommended rate: <strong>${r['group_rev_rec']:,.0f}</strong>.
+        </div>""", unsafe_allow_html=True)
     else:
         st.markdown(f"""
         <div class="disp-ok">
@@ -612,7 +621,7 @@ elif st.session_state.step == 3:
                 Min:     ${proj:,.2f} × {r['mult_min']:.0%} = <b>${r['rate_min']:,.0f}</b><br>
                 Rec:     ${proj:,.2f} × {r['mult_rec']:.0%} = <b>${r['rate_rec']:,.0f}</b><br>
                 Stretch: ${proj:,.2f} × {r['mult_str']:.0%} = <b>${r['rate_stretch']:,.0f}</b><br>
-                (rates rounded to nearest $10)<br><br>
+                (rates rounded up to nearest $10)<br><br>
                 — Displacement Calculation —<br>
                 Fill threshold (95% occ): {round(0.95 * total_rooms)} rooms × {nights} nights = {fill_thresh} room-nights<br>
                 Currently on books:       {round((md['curr_occ']/100) * total_rooms)} rooms × {nights} nights = {otb_rn} room-nights<br>
