@@ -8,26 +8,26 @@ A Streamlit app that gives your revenue team structured, data-driven group rate 
 
 The app has **3 steps**:
 
-1. **Sales Team** enters group details (name, dates, room block)
-2. **Revenue Manager** enters market data (3-yr history, STR, pace, forecast)
-3. **App evaluates** the manager's proposed rate + displacement analysis + downloadable PDF
+1. **Sales Team** enters group details and stay dates
+2. **Revenue Manager** enters daily room block, history, forecast, STR, pace, and proposed rate
+3. **App evaluates** the proposed rate with daily displacement analysis + downloadable PDF
 
 ### Pricing Logic
 
 ```
-3-yr avg ADR (same dates)
+For each stay date:
+3-yr avg ADR
   × (1 + historical YoY ADR trend %)
   × (1 + manager's growth assumption %)
-= Projected Transient ADR  ← rate anchor
+= Daily Projected Transient ADR  ← rate anchor
 
 Manager enters proposed group rate
-  compared against projected transient ADR for context
+  compared against weighted projected transient ADR for context
 
 Displacement math:
-  Displaced room-nights = max((forecasted transient rooms + group rooms) − hotel capacity, 0), summed across stay dates
-  Displaced revenue     = displaced room-nights × projected transient ADR
-  Group revenue         = block × nights × proposed rate
-  Net revenue position  = group revenue − displaced transient revenue
+  Daily displaced rooms = max((forecasted transient rooms + daily group rooms) - hotel capacity, 0)
+  Daily displaced revenue = daily displaced rooms × daily projected transient ADR
+  Totals are summed across stay dates
 ```
 
 ---
@@ -88,8 +88,8 @@ streamlit run app.py
 
 | Source | Fields |
 |--------|--------|
-| PMS / history | Occupancy % + ADR for same dates in prior 3 years |
-| Current forecast | Forecasted occupancy % + ADR on books for group dates |
+| PMS / history | Daily occupancy % + ADR for each stay date in prior 3 years |
+| Current forecast | Daily forecasted occupancy % or transient rooms + ADR on books |
 | STR Report | MPI, ARI, comp set occupancy % |
 | Pace report | Rooms on books now vs. same time last year |
 | Manager judgment | Expected ADR growth %, proposed group rate |
@@ -99,9 +99,9 @@ streamlit run app.py
 ## Output
 
 - **Proposed rate analysis**: group rate vs. projected transient ADR
-- **Displacement analysis**: displaced room-nights, displaced revenue, net impact
-- **Revenue comparison table**: group revenue vs. transient revenue at each tier
-- **PDF report**: downloadable one-pager for proposals / sales communication
+- **Daily displacement table**: stay date, group rooms, forecast, demand, capacity, displaced rooms, ADR, revenue, and net position
+- **Displacement analysis**: total displaced room-nights, displaced revenue, and net impact
+- **PDF report**: downloadable daily displacement report for proposals / sales communication
 
 ---
 
