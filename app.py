@@ -7,6 +7,16 @@ from utils.pdf_export import generate_pdf_report
 from utils.pricing_engine import run_pricing_engine
 
 
+FB_ITEM_OPTIONS = [
+    "Breakfast",
+    "Lunch",
+    "Dinner",
+    "Welcome Drinks",
+    "Coffee Break",
+    "Custom / Other",
+]
+
+
 st.set_page_config(
     page_title="Group Pricing Tool",
     page_icon="🏨",
@@ -195,15 +205,24 @@ def daily_results_df(results: dict) -> pd.DataFrame:
 
 def ancillary_revenue_summary(ancillary_data: dict) -> dict:
     banquet_revenue = float(ancillary_data.get("banquet_revenue", 0.0))
-    fb_attendees = int(ancillary_data.get("fb_attendees", 0))
-    fb_price_per_head = float(ancillary_data.get("fb_price_per_head", 0.0))
-    fb_revenue = fb_attendees * fb_price_per_head
+    fb_items = []
+    for item in ancillary_data.get("fb_items", []):
+        attendees = int(item.get("attendees", 0))
+        price_per_head = float(item.get("price_per_head", 0.0))
+        revenue = attendees * price_per_head
+        fb_items.append({
+            "item": item.get("item", ""),
+            "attendees": attendees,
+            "price_per_head": price_per_head,
+            "notes": item.get("notes", ""),
+            "revenue": revenue,
+        })
+    fb_revenue = sum(item["revenue"] for item in fb_items)
     total_ancillary_revenue = banquet_revenue + fb_revenue
     return {
         **ancillary_data,
         "banquet_revenue": banquet_revenue,
-        "fb_attendees": fb_attendees,
-        "fb_price_per_head": fb_price_per_head,
+        "fb_items": fb_items,
         "fb_revenue": fb_revenue,
         "total_ancillary_revenue": total_ancillary_revenue,
     }
@@ -225,9 +244,8 @@ if "ancillary_data" not in st.session_state:
         "banquet_revenue": 0.0,
         "banquet_notes": "",
         "fb_required": "No",
-        "fb_attendees": 0,
-        "fb_price_per_head": 0.0,
-        "fb_notes": "",
+        "fb_selected_items": [],
+        "fb_items": [],
     }
 
 st.markdown("""
@@ -604,39 +622,59 @@ elif st.session_state.step == 3:
             disabled=banquet_required == "No",
         )
 
-        f1, f2, f3 = st.columns([1, 1, 1])
-        with f1:
+        with st.container():
             fb_required = st.radio(
                 "Does the group require F&B?",
                 ["No", "Yes"],
                 horizontal=True,
                 index=1 if st.session_state.ancillary_data.get("fb_required") == "Yes" else 0,
             )
-        with f2:
-            fb_attendees = st.number_input(
-                "Number of attendees / heads",
-                min_value=0,
-                max_value=100000,
-                value=int(st.session_state.ancillary_data.get("fb_attendees", 0)),
-                step=1,
-                disabled=fb_required == "No",
-            )
-        with f3:
-            fb_price_per_head = st.number_input(
-                "F&B price per head",
-                min_value=0.0,
-                value=float(st.session_state.ancillary_data.get("fb_price_per_head", 0.0)),
-                step=1.0,
+            selected_fb_items = st.multiselect(
+                "F&B meal/service components",
+                FB_ITEM_OPTIONS,
+                default=st.session_state.ancillary_data.get("fb_selected_items", []),
                 disabled=fb_required == "No",
             )
 
-        fb_notes = st.text_area(
-            "F&B notes",
-            value=st.session_state.ancillary_data.get("fb_notes", ""),
-            placeholder="Breakfast, lunch, dinner, buffet, coffee break...",
-            height=70,
-            disabled=fb_required == "No",
-        )
+            prior_fb_items = {
+                item.get("item"): item
+                for item in st.session_state.ancillary_data.get("fb_items", [])
+            }
+            fb_items = []
+            for fb_item in selected_fb_items:
+                prior = prior_fb_items.get(fb_item, {})
+                st.markdown(f"**{fb_item}**")
+                item_cols = st.columns([1, 1, 2])
+                with item_cols[0]:
+                    item_attendees = st.number_input(
+                        f"{fb_item} attendees / heads",
+                        min_value=0,
+                        max_value=100000,
+                        value=int(prior.get("attendees", 0)),
+                        step=1,
+                        key=f"fb_attendees_{fb_item}",
+                    )
+                with item_cols[1]:
+                    item_price = st.number_input(
+                        f"{fb_item} price per head",
+                        min_value=0.0,
+                        value=float(prior.get("price_per_head", 0.0)),
+                        step=1.0,
+                        key=f"fb_price_{fb_item}",
+                    )
+                with item_cols[2]:
+                    item_notes = st.text_input(
+                        f"{fb_item} notes",
+                        value=prior.get("notes", ""),
+                        placeholder="Timing, menu, service style...",
+                        key=f"fb_notes_{fb_item}",
+                    )
+                fb_items.append({
+                    "item": fb_item,
+                    "attendees": item_attendees,
+                    "price_per_head": item_price,
+                    "notes": item_notes,
+                })
 
     ancillary_data = ancillary_revenue_summary({
         "banquet_required": banquet_required,
@@ -645,9 +683,8 @@ elif st.session_state.step == 3:
         "banquet_revenue": banquet_revenue if banquet_required == "Yes" else 0.0,
         "banquet_notes": banquet_notes if banquet_required == "Yes" else "",
         "fb_required": fb_required,
-        "fb_attendees": fb_attendees if fb_required == "Yes" else 0,
-        "fb_price_per_head": fb_price_per_head if fb_required == "Yes" else 0.0,
-        "fb_notes": fb_notes if fb_required == "Yes" else "",
+        "fb_selected_items": selected_fb_items if fb_required == "Yes" else [],
+        "fb_items": fb_items if fb_required == "Yes" else [],
     })
     st.session_state.ancillary_data = ancillary_data
 
@@ -658,10 +695,21 @@ elif st.session_state.step == 3:
     total_group_with_ancillaries = room_revenue + total_ancillary
     total_net_with_ancillaries = r["net_revenue_position"] + total_ancillary
 
-    st.caption(
-        f"F&B Revenue = {ancillary_data['fb_attendees']:,} attendees x "
-        f"${ancillary_data['fb_price_per_head']:,.2f} per head = ${fb_total:,.0f}"
-    )
+    fb_detail_df = pd.DataFrame([
+        {
+            "F&B Item": item["item"],
+            "Attendees": item["attendees"],
+            "Price Per Head": f"${item['price_per_head']:,.2f}",
+            "Revenue": f"${item['revenue']:,.0f}",
+            "Notes": item["notes"],
+        }
+        for item in ancillary_data["fb_items"]
+    ])
+    if not fb_detail_df.empty:
+        st.markdown("#### F&B Detail")
+        st.dataframe(fb_detail_df, use_container_width=True, hide_index=True)
+    else:
+        st.caption("F&B Revenue = $0")
 
     st.markdown("#### Revenue Comparison Including Ancillaries")
     st.dataframe(pd.DataFrame({
@@ -685,11 +733,14 @@ elif st.session_state.step == 3:
         ],
     }), use_container_width=True, hide_index=True)
 
-    revenue_mix_df = pd.DataFrame({
-        "Revenue Component": ["Rooms Revenue", "F&B Revenue", "Banquet Hall Revenue"],
-        "Revenue": [room_revenue, fb_total, banquet_total],
-    })
-    if revenue_mix_df["Revenue"].sum() > 0:
+    revenue_mix_data = [
+        {"Revenue Component": "Rooms Revenue", "Revenue": room_revenue},
+        {"Revenue Component": "F&B Revenue", "Revenue": fb_total},
+        {"Revenue Component": "Banquet Hall Revenue", "Revenue": banquet_total},
+    ]
+    revenue_mix_data = [row for row in revenue_mix_data if row["Revenue"] > 0]
+    if revenue_mix_data:
+        revenue_mix_df = pd.DataFrame(revenue_mix_data)
         st.markdown("#### Revenue Mix")
         st.vega_lite_chart(
             revenue_mix_df,
@@ -791,9 +842,8 @@ displaced rooms = {row['displaced_rooms']}, net = ${row['net_revenue_position']:
                 "banquet_revenue": 0.0,
                 "banquet_notes": "",
                 "fb_required": "No",
-                "fb_attendees": 0,
-                "fb_price_per_head": 0.0,
-                "fb_notes": "",
+                "fb_selected_items": [],
+                "fb_items": [],
             }
             st.rerun()
     with col_pdf:

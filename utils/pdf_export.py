@@ -47,9 +47,19 @@ def _safe_text(value: Any) -> str:
 def _ancillary_summary(ancillary_data: dict[str, Any] | None) -> dict[str, Any]:
     data = ancillary_data or {}
     banquet_revenue = float(data.get("banquet_revenue", 0.0) or 0.0)
-    fb_attendees = int(data.get("fb_attendees", 0) or 0)
-    fb_price_per_head = float(data.get("fb_price_per_head", 0.0) or 0.0)
-    fb_revenue = float(data.get("fb_revenue", fb_attendees * fb_price_per_head) or 0.0)
+    fb_items = []
+    for item in data.get("fb_items", []):
+        attendees = int(item.get("attendees", 0) or 0)
+        price_per_head = float(item.get("price_per_head", 0.0) or 0.0)
+        revenue = float(item.get("revenue", attendees * price_per_head) or 0.0)
+        fb_items.append({
+            "item": item.get("item", ""),
+            "attendees": attendees,
+            "price_per_head": price_per_head,
+            "revenue": revenue,
+            "notes": item.get("notes", ""),
+        })
+    fb_revenue = sum(item["revenue"] for item in fb_items)
     return {
         "banquet_required": data.get("banquet_required", "No"),
         "banquet_count": int(data.get("banquet_count", 0) or 0),
@@ -57,45 +67,40 @@ def _ancillary_summary(ancillary_data: dict[str, Any] | None) -> dict[str, Any]:
         "banquet_revenue": banquet_revenue,
         "banquet_notes": data.get("banquet_notes", ""),
         "fb_required": data.get("fb_required", "No"),
-        "fb_attendees": fb_attendees,
-        "fb_price_per_head": fb_price_per_head,
+        "fb_items": fb_items,
         "fb_revenue": fb_revenue,
-        "fb_notes": data.get("fb_notes", ""),
         "total_ancillary_revenue": banquet_revenue + fb_revenue,
     }
 
 
 def _revenue_mix_chart(room_revenue: float, fb_revenue: float, banquet_revenue: float) -> Drawing:
     drawing = Drawing(360, 180)
-    values = [max(room_revenue, 0), max(fb_revenue, 0), max(banquet_revenue, 0)]
-    labels = ["Rooms", "F&B", "Banquet"]
-    if sum(values) <= 0:
-        values = [1]
-        labels = ["No revenue"]
+    revenue_mix_data = [
+        ("Rooms Revenue", "Rooms", room_revenue, BLUE),
+        ("F&B Revenue", "F&B", fb_revenue, GREEN),
+        ("Banquet Hall Revenue", "Banquet", banquet_revenue, colors.HexColor("#EA580C")),
+    ]
+    revenue_mix_data = [row for row in revenue_mix_data if row[2] > 0]
+    if not revenue_mix_data:
+        revenue_mix_data = [("No revenue", "No revenue", 1, LGRAY)]
 
     pie = Pie()
     pie.x = 30
     pie.y = 20
     pie.width = 140
     pie.height = 140
-    pie.data = values
-    pie.labels = labels
+    pie.data = [row[2] for row in revenue_mix_data]
+    pie.labels = [row[1] for row in revenue_mix_data]
     pie.slices.strokeWidth = 0.5
-    pie.slices[0].fillColor = BLUE
-    if len(values) > 1:
-        pie.slices[1].fillColor = GREEN
-        pie.slices[2].fillColor = colors.HexColor("#EA580C")
+    for idx, row in enumerate(revenue_mix_data):
+        pie.slices[idx].fillColor = row[3]
     drawing.add(pie)
 
-    legend_rows = [
-        ("Rooms Revenue", room_revenue, BLUE),
-        ("F&B Revenue", fb_revenue, GREEN),
-        ("Banquet Hall Revenue", banquet_revenue, colors.HexColor("#EA580C")),
-    ]
     y = 125
-    for label, value, color in legend_rows:
+    for label, _, value, color in revenue_mix_data:
         drawing.add(Rect(205, y - 2, 8, 8, fillColor=color, strokeColor=color))
-        drawing.add(String(220, y, f"{label}: {_money(value)}", fontSize=8, fillColor=NAVY))
+        display_value = _money(value) if label != "No revenue" else "$0"
+        drawing.add(String(220, y, f"{label}: {display_value}", fontSize=8, fillColor=NAVY))
         y -= 22
     return drawing
 
@@ -212,9 +217,8 @@ def generate_pdf_report(
     ancillary_rows = [
         ["Banquet hall required", ancillary["banquet_required"], "Number of banquet halls", str(ancillary["banquet_count"])],
         ["Banquet hall names/descriptions", Paragraph(_safe_text(ancillary["banquet_descriptions"]), sm), "Banquet hall revenue", _money(banquet_revenue)],
-        ["F&B required", ancillary["fb_required"], "Number of attendees", f"{ancillary['fb_attendees']:,}"],
-        ["F&B price per head", _money(ancillary["fb_price_per_head"]), "F&B revenue", f"{ancillary['fb_attendees']:,} attendees x {_money(ancillary['fb_price_per_head'])} per head = {_money(fb_revenue)}"],
-        ["F&B notes", Paragraph(_safe_text(ancillary["fb_notes"]), sm), "Banquet notes", Paragraph(_safe_text(ancillary["banquet_notes"]), sm)],
+        ["F&B required", ancillary["fb_required"], "F&B revenue", _money(fb_revenue)],
+        ["Banquet notes", Paragraph(_safe_text(ancillary["banquet_notes"]), sm), "", ""],
     ]
     ancillary_table = Table(ancillary_rows, colWidths=[1.55 * inch, 3.0 * inch, 1.55 * inch, 3.0 * inch])
     ancillary_table.setStyle(TableStyle([
@@ -231,6 +235,41 @@ def generate_pdf_report(
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]))
     story.append(ancillary_table)
+    story.append(Spacer(1, 0.12 * inch))
+
+    story.append(Paragraph("F&amp;B Breakdown", h2))
+    story.append(HRFlowable(width="100%", thickness=1.3, color=BLUE, spaceAfter=5))
+    fb_rows = [["F&B Item", "Attendees", "Price Per Head", "Revenue", "Notes"]]
+    if ancillary["fb_items"]:
+        for item in ancillary["fb_items"]:
+            fb_rows.append([
+                _safe_text(item["item"]),
+                f"{item['attendees']:,}",
+                _money(item["price_per_head"]),
+                _money(item["revenue"]),
+                Paragraph(_safe_text(item["notes"]), sm),
+            ])
+    else:
+        fb_rows.append(["-", "0", "$0", "$0", "-"])
+    fb_table = Table(
+        fb_rows,
+        colWidths=[1.4 * inch, 0.9 * inch, 1.1 * inch, 1.0 * inch, 4.0 * inch],
+        repeatRows=1,
+    )
+    fb_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("ALIGN", (1, 0), (3, -1), "CENTER"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [LIGHT, colors.white]),
+        ("GRID", (0, 0), (-1, -1), 0.25, LGRAY),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(fb_table)
     story.append(Spacer(1, 0.12 * inch))
 
     story.append(Paragraph("Total Group Revenue", h2))
